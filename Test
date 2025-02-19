@@ -1,0 +1,39 @@
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+public class SchedulerService {
+    private static final Logger logger = LoggerFactory.getLogger(SchedulerService.class);
+    private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+    private final ApiService apiService = new ApiService();
+
+    public void startScheduling() {
+        scheduleNextApiCall(0); // Start immediately
+    }
+
+    private void scheduleNextApiCall(final long delaySeconds) {
+        executor.schedule(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ApiResponse response = apiService.makeApiCall();
+                    logger.info("API Call Successful. Duration: {}, TTL: {}", response.getDuration(), response.getTtl());
+
+                    // Use TTL to schedule the next call
+                    long nextDelay = response.getTtl();
+                    scheduleNextApiCall(nextDelay);
+
+                } catch (Exception e) {
+                    logger.error("API Call Failed. Retrying in 60 seconds.", e);
+                    scheduleNextApiCall(60); // Retry after 60 seconds on failure
+                }
+            }
+        }, delaySeconds, TimeUnit.SECONDS);
+    }
+
+    public void shutdown() {
+        executor.shutdownNow();
+    }
+}
