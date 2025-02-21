@@ -123,10 +123,6 @@ public class DataBaseUtility {
         }
     }
 
-    public static boolean isFailoverActive() {
-        return isFailoverActive;
-    }
-
     /**
      * Executes a stored procedure with the given name and parameters.
      */
