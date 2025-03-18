@@ -1,0 +1,51 @@
+import java.util.*;
+import java.util.concurrent.*;
+
+public class ParallelProcessingExecutor {
+    public static void main(String[] args) throws InterruptedException, ExecutionException {
+        List<Map<String, Object>> jsonArray = generateData(10000); // Simulated JSON data
+        int availableProcessors = Runtime.getRuntime().availableProcessors();
+        int poolSize = availableProcessors * 2;
+        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+        List<Future<Void>> futures = new ArrayList<>();
+
+        long startTime = System.nanoTime(); // Start time
+
+        for (Map<String, Object> json : jsonArray) {
+            futures.add(executor.submit(() -> {
+                processJson(json);
+                return null;
+            }));
+        }
+
+        for (Future<Void> future : futures) {
+            future.get(); // Blocks until each task is done
+        }
+
+        executor.shutdown();
+
+        long endTime = System.nanoTime(); // End time
+        double totalTimeInSeconds = (endTime - startTime) / 1_000_000_000.0;
+        System.out.println("Processing completed in " + totalTimeInSeconds + " seconds.");
+    }
+
+    private static void processJson(Map<String, Object> json) {
+        try {
+            long processingTime = 2000; //500 + new Random().nextInt(2500); // Simulate 500ms to 3s delay
+            Thread.sleep(processingTime);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static List<Map<String, Object>> generateData(int size) {
+        List<Map<String, Object>> data = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            Map<String, Object> json = new HashMap<>();
+            json.put("id", i);
+            json.put("value", "Item " + i);
+            data.add(json);
+        }
+        return data;
+    }
+}
