@@ -1,0 +1,39 @@
+public class CSVToJsonConverter {
+    private static final String FILE_NAME = "user_data.csv";
+
+    public static void main(String[] args) {
+        long startTime = System.currentTimeMillis();
+        
+        try (BufferedReader br = new BufferedReader(new FileReader(FILE_NAME))) {
+            String headerLine = br.readLine(); // Read the header line
+            if (headerLine == null) {
+                System.out.println("Empty CSV file");
+                return;
+            }
+            
+            String[] headers = headerLine.split(",");
+            ObjectMapper objectMapper = new ObjectMapper();
+            ArrayNode jsonArray = objectMapper.createArrayNode();
+            
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] values = line.split(",");
+                ObjectNode jsonObject = objectMapper.createObjectNode();
+                
+                for (int i = 0; i < headers.length; i++) {
+                    jsonObject.put(headers[i], values[i]);
+                }
+                jsonArray.add(jsonObject);
+            }
+            
+            long endTime = System.currentTimeMillis();
+            System.out.println("JSON conversion completed in: " + (endTime - startTime) + " ms");
+            
+            // Uncomment below if you want to print JSON output
+            // System.out.println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(jsonArray));
+            
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
