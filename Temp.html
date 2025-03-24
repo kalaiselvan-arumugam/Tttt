@@ -1,0 +1,82 @@
+<!DOCTYPE html><html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Report</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>File Processing Report</h2>
+        <table>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+            </tr>
+            <tr>
+                <td>File Name</td>
+                <td>{{file_name}}</td>
+            </tr>
+            <tr>
+                <td>Check Sum</td>
+                <td>{{check_sum}}</td>
+            </tr>
+            <tr>
+                <td>Total Records</td>
+                <td>{{total_records}}</td>
+            </tr>
+            <tr>
+                <td>Processed Records</td>
+                <td>{{processed_records}}</td>
+            </tr>
+            <tr>
+                <td>Success Count</td>
+                <td>{{success_count}}</td>
+            </tr>
+            <tr>
+                <td>Failure Count</td>
+                <td>{{failure_count}}</td>
+            </tr>
+        </table>
+        <div class="footer">This is an automated report. Please do not reply.</div>
+    </div>
+</body>
+</html>
