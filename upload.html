@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standard Chartered Bank - Admin Dashboard</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Select CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/css/bootstrap-select.min.css" rel="stylesheet">
+    
+    <!-- Toastr CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sc-blue: #0F4D92;
+            --sc-blue-dark: #0c3f75;
+            --sc-blue-light: #1a6fd4;
+            --sc-gray: #f8f9fa;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        /* Header Styles */
+        .sc-header {
+            background-color: var(--sc-blue);
+            color: white;
+            height: 60px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+        }
+        
+        .sc-logo {
+            height: 30px;
+            width: auto;
+        }
+        
+        /* Sidebar Styles */
+        .sc-sidebar {
+            background-color: white;
+            width: 250px;
+            position: fixed;
+            top: 60px;
+            bottom: 0;
+            left: 0;
+            z-index: 1020;
+            box-shadow: 1px 0 5px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .sc-sidebar.collapsed {
+            margin-left: -250px;
+        }
+        
+        .sc-sidebar .nav-link {
+            color: #333;
+            padding: 12px 20px;
+            border-left: 3px solid transparent;
+        }
+        
+        .sc-sidebar .nav-link:hover, .sc-sidebar .nav-link.active {
+            background-color: var(--sc-gray);
+            border-left: 3px solid var(--sc-blue);
+            color: var(--sc-blue);
+        }
+        
+        .sc-sidebar .nav-link i {
+            margin-right: 10px;
+            width: 20px;
+            text-align: center;
+        }
+        
+        /* Main Content Styles */
+        .sc-main-content {
+            margin-left: 250px;
+            margin-top: 60px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        
+        .sc-main-content.expanded {
+            margin-left: 0;
+        }
+        
+        /* User Profile Styles */
+        .sc-user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        
+        .sc-user-name {
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .sc-last-login {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.8);
+        }
+        
+        /* Data Table Styles */
+        .sc-data-table {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .sc-data-table thead {
+            background-color: var(--sc-blue);
+            color: white;
+        }
+        
+        .sc-data-table .table-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .sc-data-table tr:hover {
+            background-color: var(--sc-gray) !important;
+        }
+        
+        .sc-badge-pending {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .sc-badge-approved {
+            background-color: #198754;
+            color: white;
+        }
+        
+        .sc-badge-rejected {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .sc-monospace {
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        
+        /* Country Selector Styles */
+        .sc-country-selector .dropdown-menu {
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        
+        /* Responsive Adjustments */
+        @media (max-width: 992px) {
+            .sc-sidebar {
+                margin-left: -250px;
+            }
+            
+            .sc-sidebar.show {
+                margin-left: 0;
+            }
+            
+            .sc-main-content {
+                margin-left: 0;
+            }
+        }
+        
+        /* Animation for buttons */
+        .btn-sc {
+            transition: transform 0.2s;
+        }
+        
+        .btn-sc:hover {
+            transform: scale(1.02);
+        }
+		
+		.top {
+			display: flex;
+		}
+		
+		.dataTables_length .dataTables_filter {
+			width:50%;
+		}
+		
+		.sc-actions {
+        min-width: 150px;
+    }
+    
+	
+	 .action-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease-in-out;
+        background-color: rgba(15, 77, 146, 0.1);
+    }
+
+    .btn-action:hover .action-circle {
+        background-color: var(--sc-blue);
+        transform: scale(1.1);
+    }
+
+    .btn-action:hover .bi {
+        color: white !important;
+    }
+
+    .sc-actions .bi {
+        font-size: 1.1rem;
+        color: var(--sc-blue);
+        transition: color 0.2s ease-in-out;
+    }
+
+    /* Different hover colors for different actions */
+    .btn-approve:hover .action-circle {
+        background-color: #198754 !important;
+    }
+
+    .btn-reject:hover .action-circle {
+        background-color: #dc3545 !important;
+    }
+
+    .btn-delete:hover .action-circle {
+        background-color: #6c757d !important;
+    }
+
+    /* Remove default link styling */
+    .btn-action {
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+    
+    </style>
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="sc-header navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <!-- Logo and Toggle -->
+            <div class="d-flex align-items-center">
+                <button class="btn btn-link text-white d-lg-none" id="sidebarToggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                <a class="navbar-brand" href="#">
+                    <img src="https://www.sc.com/en/wp-content/themes/standardchartered/images/logo.svg" alt="Standard Chartered Bank" class="sc-logo">
+                </a>
+            </div>
+            
+            <!-- Right Side Elements -->
+            <div class="d-flex align-items-center">
+                <!-- Country Selector -->
+                <div class="sc-country-selector me-3">
+                    <select class="selectpicker" data-live-search="true" data-width="fit" data-style="btn-light">
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> India' selected>India</option>
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> China'>China</option>
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> Malaysia'>Malaysia</option>
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> Singapore'>Singapore</option>
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> Hong Kong'>Hong Kong</option>
+                        <option data-content='<i class="bi bi-flag-fill me-2"></i> UAE'>UAE</option>
+                    </select>
+                </div>
+                
+                <!-- User Profile -->
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="https://ui-avatars.com/api/?name=John+Doe&background=random" alt="User" class="sc-user-avatar">
+                        <span class="sc-user-name d-none d-sm-inline">John Doe</span>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-end shadow" aria-labelledby="dropdownUser">
+                        <div class="px-4 py-2">
+                            <p class="mb-0 small text-muted">Last login: Apr 30, 2025, 14:30 IST</p>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item" href="#">
+                            <i class="bi bi-box-arrow-right me-2"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Sidebar Navigation -->
+    <nav class="sc-sidebar navbar-collapse" id="sidebar">
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a class="nav-link active" href="#">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-upload"></i> Upload
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-list-check"></i> Audit Trail
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-people"></i> User Management
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-gear"></i> Settings
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#">
+                    <i class="bi bi-question-circle"></i> Help
+                </a>
+            </li>
+        </ul>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="sc-main-content">
+        <div class="container-fluid">
+            <div class="row mb-4">
+                <div class="col">
+                    <h2 class="h4">File Upload History</h2>
+                    <p class="text-muted mb-0">View and manage all file uploads</p>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-sc btn-primary" id="showNotification">
+                        <i class="bi bi-bell-fill me-1"></i> Test Notification
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sc-data-table card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="fileUploadTable" class="table table-hover table-striped" style="width:100%">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>File Name</th>
+                                    <th>Checksum</th>
+                                    <th>Checker</th>
+                                    <th>Maker</th>
+                                    <th>Status</th>
+                                    <th>Comments</th>
+									 <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>30-04-2025 10:15</td>
+                                    <td>customer_data_0425.csv</td>
+                                    <td class="sc-monospace"><code>SHA-256:a1b2c3d4e5f6...</code></td>
+                                    <td>Sarah Johnson</td>
+                                    <td>John Doe</td>
+                                    <td><span class="badge sc-badge-approved">Approved</span></td>
+                                    <td>All records verified</td>
+									<td>
+										<div class="d-flex gap-2 align-items-center sc-actions">
+											<a href="#" class="btn btn-action btn-view" title="View">
+												<div class="action-circle">
+													<i class="bi bi-eye"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-approve" title="Approve">
+												<div class="action-circle">
+													<i class="bi bi-check-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-reject" title="Reject">
+												<div class="action-circle">
+													<i class="bi bi-x-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-delete" title="Delete">
+												<div class="action-circle">
+													<i class="bi bi-trash"></i>
+												</div>
+											</a>
+										</div>
+									</td>
+                                </tr>
+                                <tr>
+                                    <td>29-04-2025 14:30</td>
+                                    <td>transaction_log_0429.xlsx</td>
+                                    <td class="sc-monospace">SHA-256:b2c3d4e5f6g7...</td>
+                                    <td>Michael Chen</td>
+                                    <td>Jane Smith</td>
+                                    <td><span class="badge sc-badge-approved">Approved</span></td>
+                                    <td>No discrepancies found</td>
+									<td>
+										<div class="d-flex gap-2 align-items-center sc-actions">
+											<a href="#" class="btn btn-action btn-view" title="View">
+												<div class="action-circle">
+													<i class="bi bi-eye"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-approve" title="Approve">
+												<div class="action-circle">
+													<i class="bi bi-check-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-reject" title="Reject">
+												<div class="action-circle">
+													<i class="bi bi-x-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-delete" title="Delete">
+												<div class="action-circle">
+													<i class="bi bi-trash"></i>
+												</div>
+											</a>
+										</div>
+									</td>
+                                </tr>
+                                <tr>
+                                    <td>28-04-2025 09:45</td>
+                                    <td>kyc_documents_0428.zip</td>
+                                    <td class="sc-monospace">SHA-256:c3d4e5f6g7h8...</td>
+                                    <td>Pending</td>
+                                    <td>Robert Brown</td>
+                                    <td><span class="badge sc-badge-pending">Pending</span></td>
+                                    <td>Awaiting verification</td>
+									<td>
+										<div class="d-flex gap-2 align-items-center sc-actions">
+											<a href="#" class="btn btn-action btn-view" title="View">
+												<div class="action-circle">
+													<i class="bi bi-eye"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-approve" title="Approve">
+												<div class="action-circle">
+													<i class="bi bi-check-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-reject" title="Reject">
+												<div class="action-circle">
+													<i class="bi bi-x-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-delete" title="Delete">
+												<div class="action-circle">
+													<i class="bi bi-trash"></i>
+												</div>
+											</a>
+										</div>
+									</td>
+                                </tr>
+                                <tr>
+                                    <td>27-04-2025 16:20</td>
+                                    <td>compliance_report_0427.pdf</td>
+                                    <td class="sc-monospace">SHA-256:d4e5f6g7h8i9...</td>
+                                    <td>Emily Davis</td>
+                                    <td>John Doe</td>
+                                    <td><span class="badge sc-badge-rejected">Rejected</span></td>
+                                    <td>Missing signatures on page 5</td>
+									<td>
+										<div class="d-flex gap-2 align-items-center sc-actions">
+											<a href="#" class="btn btn-action btn-view" title="View">
+												<div class="action-circle">
+													<i class="bi bi-eye"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-approve" title="Approve">
+												<div class="action-circle">
+													<i class="bi bi-check-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-reject" title="Reject">
+												<div class="action-circle">
+													<i class="bi bi-x-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-delete" title="Delete">
+												<div class="action-circle">
+													<i class="bi bi-trash"></i>
+												</div>
+											</a>
+										</div>
+									</td>
+                                </tr>
+                                <tr>
+                                    <td>26-04-2025 11:10</td>
+                                    <td>audit_findings_0426.docx</td>
+                                    <td class="sc-monospace">SHA-256:e5f6g7h8i9j0...</td>
+                                    <td>David Wilson</td>
+                                    <td>Jane Smith</td>
+                                    <td><span class="badge sc-badge-approved">Approved</span></td>
+                                    <td>All issues addressed</td>
+									<td>
+										<div class="d-flex gap-2 align-items-center sc-actions">
+											<a href="#" class="btn btn-action btn-view" title="View">
+												<div class="action-circle">
+													<i class="bi bi-eye"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-approve" title="Approve">
+												<div class="action-circle">
+													<i class="bi bi-check-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-reject" title="Reject">
+												<div class="action-circle">
+													<i class="bi bi-x-circle"></i>
+												</div>
+											</a>
+											<a href="#" class="btn btn-action btn-delete" title="Delete">
+												<div class="action-circle">
+													<i class="bi bi-trash"></i>
+												</div>
+											</a>
+										</div>
+									</td>
+                                </tr>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    
+    <!-- Bootstrap Select JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/js/bootstrap-select.min.js"></script>
+    
+    <!-- Toastr JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Initialize DataTable
+            /*$('#fileUploadTable').DataTable({
+                responsive: true,
+                pageLength: 10,
+                lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+                order: [[0, 'desc']],
+                scrollY: '500px',
+                scrollCollapse: true,
+                dom: '<"top"lf>rt<"bottom"ip>'
+            });*/
+			
+			 $('#fileUploadTable').DataTable({
+            responsive: true,
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]],
+            order: [[0, 'desc']],
+            scrollY: '500px',
+            scrollCollapse: true,
+            dom: '<"top"lf>rt<"bottom"ip>',
+            columnDefs: [
+                { orderable: false, targets: 7 } // Disable sorting for Actions column
+            ]
+        });
+            
+            // Initialize Bootstrap Select
+            $('.selectpicker').selectpicker();
+            
+            // Sidebar Toggle
+            $('#sidebarToggle').click(function() {
+                $('#sidebar').toggleClass('show');
+                $('.sc-main-content').toggleClass('expanded');
+            });
+            
+            // Test Notification Button
+            $('#showNotification').click(function() {
+                toastr.options = {
+                    positionClass: "toast-top-right",
+                    timeOut: 5000,
+                    closeButton: true,
+                    progressBar: true,
+                    newestOnTop: true,
+                    showMethod: "fadeIn",
+                    hideMethod: "fadeOut"
+                };
+                
+                // Random notification type
+                const types = ['info', 'success', 'warning', 'error'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                
+                const messages = [
+                    "New audit entry created",
+                    "File upload completed successfully",
+                    "Verification required for 3 pending files",
+                    "System maintenance scheduled for tonight",
+                    "New compliance policy updated"
+                ];
+                
+                const message = messages[Math.floor(Math.random() * messages.length)];
+                
+                toastr[type](message, type.charAt(0).toUpperCase() + type.slice(1));
+            });
+            
+            // Simulate a notification on page load
+            setTimeout(function() {
+                toastr.info('Welcome back, John Doe. You have 2 pending tasks.', 'System Notification');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
