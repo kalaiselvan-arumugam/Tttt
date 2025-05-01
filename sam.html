@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Large CSV Processor</title>
+    <style>
+        .container { max-width: 1200px; margin: 20px auto; padding: 20px; }
+        .progress-bar { 
+            height: 20px; background: #eee; margin: 20px 0; 
+            border-radius: 10px; overflow: hidden; 
+        }
+        .progress-fill { 
+            height: 100%; background: #4CAF50; 
+            transition: width 0.3s ease; 
+        }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .pagination { display: flex; gap: 10px; margin-top: 20px; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #cccccc; }
+        .error { color: #dc3545; margin: 10px 0; }
+		 .invalid-cell { background-color: #ffebee; border: 2px solid #ff0000; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <input type="file" id="csvFile" accept=".csv">
+        <div class="progress-bar">
+            <div class="progress-fill" style="width: 0%"></div>
+        </div>
+        <div class="error"></div>
+        <table>
+            <thead id="tableHeader"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+        <div class="pagination">
+            <button id="prevPage" disabled>Previous</button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button id="nextPage" disabled>Next</button>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+	
+		 let validationErrors = [];
+        
+        // Define validation rules (column indexes are 0-based)
+       /* const validationRules = [
+            { column: 0, regex: /^\+?\d{10}$/ },       // Column 1: Phone number
+            { column: 1, regex: /^[A-Za-z ]+$/ },       // Column 2: Letters only
+            { column: 2, regex: /[a-zA-Z0-9]/ },       // Column 3: Contains alphanumeric
+            { column: 5, regex: /^[\w!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]*$/ }, // Column 6
+            { column: 6, regex: /^C$/ }                // Column 7: Exactly C
+        ]; */
+		
+		 const validationRules = [
+			{ column: 0, regex: /^[A-Za-z ]+$/ },
+        ]
+	
+        let currentPage = 1;
+        let pageSize = 100;
+        let totalPages = 0;
+        let csvData = [];
+        let processingStartTime;
+
+        $('#csvFile').on('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                processingStartTime = performance.now();
+                processCSV(file);
+            }
+        });
+
+		async function processCSV(file) {
+    try {
+        $('.error').text('');
+        csvData = [];
+        validationErrors = [];
+        let header = null;
+        let buffer = '';
+        let bytesRead = 0;
+        let chunkSize = 1024 * 1024;
+        let startTime = performance.now();
+
+        for (let offset = 0; offset < file.size; offset += chunkSize) {
+            const chunk = file.slice(offset, offset + chunkSize);
+            const textChunk = await readChunk(chunk);
+            buffer += textChunk;
+            
+            const rows = buffer.split(/\r?\n/);
+            buffer = rows.pop() || '';
+
+            if (!header) {
+                header = parseCSVRow(rows.shift());
+                createHeaders(header);
+            }
+
+            await processRowsInBatches(rows, header.length);
+            
+            bytesRead += chunkSize;
+            updateProgress(Math.min(bytesRead / file.size * 100, 100));
+        }
+
+        totalPages = Math.ceil(csvData.length / pageSize);
+        setupPagination();
+        console.log(`Total processing time: ${performance.now() - startTime}ms`);
+
+        // Console-only error reporting
+        validationErrors.forEach((errors, index) => {
+            if (errors.length > 0) {
+                console.log(`Row ${index + 1} errors:`, 
+                    errors.map(e => `Column ${e.column + 1} failed ${e.rule}`).join(', '));
+            }
+        });
+
+    } catch (error) {
+        handleError(error.message);
+    }
+}
+
+function renderCurrentPage() {
+    const startTime = performance.now();
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    const pageData = csvData.slice(start, end);
+    
+    const fragment = document.createDocumentFragment();
+    pageData.forEach((row, index) => {
+        const $tr = $('<tr>');
+        const originalIndex = start + index;
+        const errors = validationErrors[originalIndex] || [];
+        
+        row.forEach((cell, colIndex) => {
+            const isInvalid = errors.some(e => e.column === colIndex);
+            const $td = $('<td>')
+                .text(cell)
+                .toggleClass('invalid-cell', isInvalid);
+            $tr.append($td);
+        });
+        
+        fragment.appendChild($tr[0]);
+    });
+
+    $('#tableBody').empty().append(fragment);
+    $('#pageInfo').text(`Page ${currentPage} of ${totalPages}`);
+    console.log(`Page rendered in ${performance.now() - startTime}ms`);
+}
+
+
+        function readChunk(chunk) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsText(chunk);
+            });
+        }
+
+         async function processRowsInBatches(rows, expectedColumns, batchSize = 1000) {
+            const parserStart = performance.now();
+            for (let i = 0; i < rows.length; i += batchSize) {
+                const batch = rows.slice(i, i + batchSize);
+                batch.forEach(row => {
+                    const parsed = parseCSVRow(row);
+                    if (parsed.length !== expectedColumns) {
+                        throw new Error('CSV structure mismatch');
+                    }
+                    // Validate row and store errors
+                    const errors = validateRow(parsed);
+                    if (errors.length > 0) {
+                        validationErrors.push(errors);
+                    } else {
+                        validationErrors.push([]);
+                    }
+                    csvData.push(parsed);
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+            console.log(`Batch processed in ${performance.now() - parserStart}ms`);
+        }
+		
+		 function validateRow(row) {
+            const errors = [];
+            for (const rule of validationRules) {
+                const value = row[rule.column] || '';
+                if (!rule.regex.test(value)) {
+                    errors.push({
+                        column: rule.column,
+                        value: value,
+                        rule: rule.regex.toString()
+                    });
+                }
+            }
+            return errors;
+        }
+
+        function parseCSVRow(row) {
+            // Simple CSV parser - consider using library for production
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let char of row) {
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+            return result;
+        }
+
+        function createHeaders(headerData) {
+            const startTime = performance.now();
+            const $headerRow = $('<tr>');
+            headerData.forEach(col => $headerRow.append($('<th>').text(col)));
+            $('#tableHeader').empty().append($headerRow);
+            console.log(`Header created in ${performance.now() - startTime}ms`);
+        }
+
+        function updateProgress(percent) {
+            $('.progress-fill').css('width', `${percent}%`);
+        }
+
+        function setupPagination() {
+            $('#prevPage, #nextPage').prop('disabled', false);
+            renderCurrentPage();
+        }
+
+        function renderCurrentPage() {
+            const startTime = performance.now();
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageData = csvData.slice(start, end);
+            
+            const fragment = document.createDocumentFragment();
+            pageData.forEach((row, index) => {
+                const $tr = $('<tr>');
+                const originalIndex = start + index;
+                const errors = validationErrors[originalIndex] || [];
+                
+                row.forEach((cell, colIndex) => {
+                    const isInvalid = errors.some(e => e.column === colIndex);
+                    const $td = $('<td>')
+                        .text(cell)
+                        .toggleClass('invalid-cell', isInvalid)
+                        .attr('title', isInvalid ? 
+                            `Row ${originalIndex + 1} validation failed` : '');
+                    $tr.append($td);
+                });
+                
+                fragment.appendChild($tr[0]);
+            });
+
+            $('#tableBody').empty().append(fragment);
+            $('#pageInfo').text(`Page ${currentPage} of ${totalPages}`);
+            console.log(`Page rendered in ${performance.now() - startTime}ms`);
+            
+            // Log validation errors for current page
+            pageData.forEach((_, index) => {
+                const originalIndex = start + index;
+                const errors = validationErrors[originalIndex];
+                if (errors && errors.length > 0) {
+                    console.log(`Row ${originalIndex + 1} errors:`, errors);
+                }
+            });
+        }
+
+        $('#prevPage').click(() => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderCurrentPage();
+            }
+        });
+
+        $('#nextPage').click(() => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderCurrentPage();
+            }
+        });
+
+        function handleError(message) {
+            $('.error').text(message);
+            $('.progress-fill').css('width', '0%');
+            csvData = [];
+        }
+    </script>
+</body>
+</html>
