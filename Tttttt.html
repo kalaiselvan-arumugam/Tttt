@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Large CSV Viewer</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2196F3;
+            --background: #f5f5f5;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 20px;
+            background: var(--background);
+        }
+
+        .progress-container {
+            height: 4px;
+            background: #ddd;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.3s ease;
+        }
+
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 15px;
+        }
+
+        #csvTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .error-message {
+            color: #d32f2f;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="csvFile" accept=".csv">
+    <div class="progress-container">
+        <div class="progress-bar"></div>
+    </div>
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="Search...">
+        <select id="pageSize">
+            <option value="10">10</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">All</option>
+        </select>
+    </div>
+    <div class="error-message"></div>
+    <table id="csvTable">
+        <thead></thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        let currentData = [];
+        let filteredData = null;
+        let headers = [];
+        let pageSize = 10;
+        let currentPage = 1;
+
+        // File processing variables
+        let chunkSize = 1024 * 1024; // 1MB chunks
+        let fileReader = new FileReader();
+        let processedBytes = 0;
+        let buffer = '';
+
+        $('#csvFile').on('change', function(e) {
+            console.time('Total processing time');
+            const file = e.target.files[0];
+            if (!file) return;
+
+            resetUI();
+            initializeProcessing(file);
+        });
+
+        function initializeProcessing(file) {
+            $('.progress-container').show();
+            currentData = [];
+            processedBytes = 0;
+            buffer = '';
+
+            readChunk(file, 0);
+        }
+
+        function readChunk(file, start) {
+            const chunk = file.slice(start, start + chunkSize);
+            fileReader.onload = processChunk.bind(null, file, start);
+            fileReader.readAsText(chunk);
+        }
+
+        function processChunk(file, start, e) {
+            console.time('Chunk processing');
+            const text = e.target.result;
+            processedBytes += text.length;
+            
+            // Update progress
+            const progress = (processedBytes / file.size) * 100;
+            $('.progress-bar').css('width', `${progress}%`);
+
+            // Combine with previous buffer and split lines
+            const combined = buffer + text;
+            const lines = combined.split(/\r?\n/);
+            buffer = lines.pop() || ''; // Save incomplete line
+
+            if (!headers.length) {
+                processHeader(lines);
+            }
+
+            processDataLines(lines, file, start);
+            console.timeEnd('Chunk processing');
+
+            if (processedBytes < file.size) {
+                readChunk(file, start + chunkSize);
+            } else {
+                finalizeProcessing();
+            }
+        }
+
+        function processHeader(lines) {
+            if (lines.length > 0) {
+                headers = parseCSVLine(lines.shift());
+                createTableHeader();
+            }
+        }
+
+        function processDataLines(lines, file, start) {
+            const docFrag = document.createDocumentFragment();
+            
+            lines.forEach(line => {
+                const fields = parseCSVLine(line);
+                if (fields.length !== headers.length) {
+                    handleFormatError();
+                    return;
+                }
+                const row = createTableRow(fields);
+                docFrag.appendChild(row);
+            });
+
+            $('#csvTable tbody').append(docFrag);
+        }
+
+        function parseCSVLine(line) {
+            // Simple CSV parser - for production use consider proper CSV parsing library
+            let fields = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let c of line) {
+                if (c === '"') {
+                    inQuotes = !inQuotes;
+                } else if (c === ',' && !inQuotes) {
+                    fields.push(current);
+                    current = '';
+                } else {
+                    current += c;
+                }
+            }
+            fields.push(current);
+            return fields;
+        }
+
+        function createTableHeader() {
+            const $headerRow = $('<tr>');
+            headers.forEach(header => {
+                $headerRow.append($(`<th>`).text(header));
+            });
+            $('#csvTable thead').empty().append($headerRow);
+        }
+
+        function createTableRow(fields) {
+            const $row = $('<tr>');
+            fields.forEach(field => {
+                $row.append($('<td>').text(field));
+            });
+            return $row[0];
+        }
+
+        function finalizeProcessing() {
+            $('.progress-container').hide();
+            console.timeEnd('Total processing time');
+            initializePagination();
+        }
+
+        function initializePagination() {
+            $('#pageSize').on('change', updatePagination);
+            $('#searchInput').on('input', debounce(handleSearch, 300));
+            updatePagination();
+        }
+
+        function updatePagination() {
+            pageSize = $('#pageSize').val() === 'all' ? currentData.length : parseInt($('#pageSize').val());
+            currentPage = 1;
+            renderTable();
+        }
+
+        function handleSearch() {
+            const term = $('#searchInput').val().toLowerCase();
+            filteredData = currentData.filter(row => 
+                Object.values(row).some(val => 
+                    val.toLowerCase().includes(term)
+                )
+            );
+            renderTable();
+        }
+
+        function renderTable() {
+            const data = filteredData || currentData;
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            const pageData = data.slice(start, end);
+
+            const $tbody = $('#csvTable tbody');
+            $tbody.empty();
+            
+            const docFrag = document.createDocumentFragment();
+            pageData.forEach(row => {
+                docFrag.appendChild(createTableRow(Object.values(row)));
+            });
+            $tbody.append(docFrag);
+        }
+
+        function handleFormatError() {
+            $('.error-message').text('CSV format error - column count mismatch').show();
+            setTimeout(() => $('.error-message').hide(), 5000);
+            $('#csvFile').val('');
+        }
+
+        function resetUI() {
+            $('#csvTable thead').empty();
+            $('#csvTable tbody').empty();
+            $('.error-message').hide();
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return (...args) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+    </script>
+</body>
+</html>
