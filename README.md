@@ -59,3 +59,34 @@ basicDataSource.setUrl(String.format(
     databaseConfig.get("service").getAsString()
 ));
 ```
+
+
+``` txt
+1. My file will have headers
+2. the records can be separated in to 2 groups based on the value of User Type (Column F)
+3. If the User Type is Internal add that to a HashMap with Unique ID (Column A) as key and Email Address (Column H) as value
+4. We need to create a separate records for all the records with External as value in User Type (Column E)
+5. instead of following original header we need to create new headers below are the mapping
+
+Unique ID (Column A) -> Party ID
+Account Number -> Account Number 
+First Name (Column D) -> Party First Name
+Middle Name -> Party Middle Name
+Last Name (Column E)-> Party Last Name
+Email Address (Column H) -> Email
+**Need to Create** -> RM Email
+
+Here Account Number and Middle Name may or may not be available in the original header so your logic should fill the values if it is present int the original header else just create header and leave the values blank
+**Need to Create** ->For this column there will be a value available in Default RM (Column L) now you need to consider this as a key for the hashmap and replace the actual data with the the hashmap value
+
+below are the conditions if anything fails mark it as in red in the HTML table
+
+
+Party ID -> Not null
+Account Number -> can be null
+Party First Name -> If there is a value in Party Last Name it can be null other wise not null
+Party Middle Name -> Can be null
+Party Last Name -> If there is a value in Party first Name it can be null other wise not null
+Email -> email format validation the email may contain domains like xx.com xx.xx.com etc
+RM Email -> email format validation the email the domain should be dd.com
+```
