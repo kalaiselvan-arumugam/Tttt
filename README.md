@@ -90,3 +90,7 @@ Party Last Name -> If there is a value in Party first Name it can be null other 
 Email -> email format validation the email may contain domains like xx.com xx.xx.com etc
 RM Email -> email format validation the email the domain should be dd.com
 ```
+
+``` txt
+Party ID,Account Number,Party First Name,Party Middle Name,Party Last Name,Email,RM Email
+```
