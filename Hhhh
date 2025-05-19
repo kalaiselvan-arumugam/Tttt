@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enterprise CSV Processor</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <style>
+        .invalid { background-color: #ffebee; }
+        .progress-container { height: 4px; background: #ddd; margin: 20px 0; }
+        .progress-bar { height: 100%; background: #4CAF50; transition: width 0.3s; }
+        .virtual-scroll { height: 70vh; overflow-y: auto; border: 1px solid #ddd; }
+        #csvTable { width: 100%; border-collapse: collapse; }
+        #csvTable th, #csvTable td { padding: 12px; border: 1px solid #ddd; }
+        #csvTable th { background-color: #f5f5f5; position: sticky; top: 0; }
+        .controls { margin-bottom: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+        button { padding: 10px; background: #2196F3; color: white; border: none; cursor: pointer; }
+        button:disabled { background: #90CAF9; cursor: not-allowed; }
+        .error { color: #d32f2f; padding: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <select id="countrySelect">
+            <option value="Singapore">Singapore</option>
+            <option value="HongKong">Hong Kong</option>
+        </select>
+        <button id="uploadBtn">Upload CSV</button>
+        <input type="file" id="csvFile" hidden accept=".csv">
+        <button id="downloadValid">Download Valid (CSV)</button>
+        <button id="downloadInvalid">Download Invalid (XLSX)</button>
+    </div>
+    <div class="progress-container">
+        <div class="progress-bar" style="width: 0%"></div>
+    </div>
+    <div class="error"></div>
+    <div class="virtual-scroll">
+        <table id="csvTable">
+            <thead id="tableHeader"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const countryConfig = {
+            Singapore: {
+                columns: ['Unique ID', 'First Name', 'Last Name', 'Email Address', 'Default RM', 'User Type'],
+                output: ['Party ID', 'Account Number', 'Party First Name', 'Party Last Name', 'Email', 'RM Email'],
+                validations: {
+                    'Party ID': { regex: /^\d+$/ },
+                    'Email': { regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ },
+                    'RM Email': { regex: /@dd\.com$/ }
+                }
+            },
+            HongKong: {
+                columns: ['Party ID', 'Account Number', 'Party First Name', 'Party Last Name', 'Email', 'RM Email'],
+                output: ['Party ID', 'Account Number', 'Party First Name', 'Party Last Name', 'Email', 'RM Email'],
+                validations: {
+                    'Party ID': { regex: /^\d+$/ },
+                    'Email': { regex: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ }
+                }
+            }
+        };
+
+        let worker;
+        let csvData = [];
+        let validationErrors = [];
+        let currentCountry = 'Singapore';
+        let rowHeight = 40;
+        let visibleRows = 0;
+
+        // Initialize
+        $(() => {
+            visibleRows = Math.ceil($('.virtual-scroll').height() / rowHeight);
+            setupEventHandlers();
+        });
+
+        function setupEventHandlers() {
+            $('#uploadBtn').click(() => $('#csvFile').click());
+            $('#csvFile').on('change', handleFileUpload);
+            $('#countrySelect').change(updateCountry);
+            $('.virtual-scroll').on('scroll', handleScroll);
+            $('#downloadValid').click(() => downloadData('valid', 'csv'));
+            $('#downloadInvalid').click(() => downloadData('invalid', 'xlsx'));
+        }
+
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!validateFile(file)) return;
+            
+            showLoading(true);
+            csvData = [];
+            validationErrors = [];
+            
+            try {
+                await processCSV(file);
+                renderVirtualScroll();
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function processCSV(file) {
+            return new Promise((resolve, reject) => {
+                const workerCode = `
+                    function arraysEqual(a, b) {
+                        return a.length === b.length && a.every((v, i) => v === b[i]);
+                    }
+
+                    function parseCSVRow(row) {
+                        let result = [];
+                        let current = '';
+                        let inQuotes = false;
+                        
+                        for (const char of row) {
+                            if (char === '"') {
+                                inQuotes = !inQuotes;
+                            } else if (char === ',' && !inQuotes) {
+                                result.push(current.trim());
+                                current = '';
+                            } else {
+                                current += char;
+                            }
+                        }
+                        result.push(current.trim());
+                        return result;
+                    }
+
+                    function processRow(row, country, internalUsers) {
+                        if (country === 'Singapore') {
+                            if (row[5] === 'Internal') {
+                                internalUsers.set(row[0], row[3]);
+                                return null;
+                            }
+                            return {
+                                'Party ID': row[0],
+                                'Account Number': '',
+                                'Party First Name': row[1],
+                                'Party Last Name': row[2],
+                                'Email': row[3],
+                                'RM Email': internalUsers.get(row[4]) || ''
+                            };
+                        }
+                        return {
+                            'Party ID': row[0],
+                            'Account Number': row[1],
+                            'Party First Name': row[2],
+                            'Party Last Name': row[3],
+                            'Email': row[4],
+                            'RM Email': row[5]
+                        };
+                    }
+
+                    function validateRow(processed, country) {
+                        if (!processed) return [];
+                        const errors = [];
+                        const config = ${JSON.stringify(countryConfig)}[country].validations;
+
+                        // Field validations
+                        Object.entries(config).forEach(([field, { regex }]) => {
+                            const value = processed[field];
+                            if (!regex.test(value || '')) {
+                                errors.push(field);
+                            }
+                        });
+
+                        // Name validation
+                        const firstName = processed['Party First Name']?.trim();
+                        const lastName = processed['Party Last Name']?.trim();
+                        if (!firstName && !lastName) {
+                            errors.push('Party First Name', 'Party Last Name');
+                        }
+
+                        return [...new Set(errors)];
+                    }
+
+                    self.onmessage = async (e) => {
+                        const { file, country } = e.data;
+                        const internalUsers = new Map();
+                        const config = ${JSON.stringify(countryConfig)}[country];
+
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const text = e.target.result;
+                            const rows = text.split(/\\r?\\n/).filter(r => r.trim());
+                            
+                            // Validate headers
+                            const headers = parseCSVRow(rows[0]);
+                            if (!arraysEqual(headers, config.columns)) {
+                                self.postMessage({ error: 'Invalid CSV headers' });
+                                return;
+                            }
+
+                            // Process rows
+                            for (let i = 1; i < rows.length; i++) {
+                                const row = parseCSVRow(rows[i]);
+                                const processed = processRow(row, country, internalUsers);
+                                const errors = validateRow(processed, country);
+                                
+                                self.postMessage({
+                                    data: processed,
+                                    errors,
+                                    progress: (i / (rows.length - 1) * 100)
+                                });
+                            }
+                            
+                            self.postMessage({ done: true });
+                        };
+                        reader.readAsText(file);
+                    }`;
+
+                worker = new Worker(URL.createObjectURL(
+                    new Blob([workerCode], { type: 'text/javascript' })
+                ));
+
+                worker.postMessage({ file, country: currentCountry });
+                
+                worker.onmessage = (e) => {
+                    if (e.data.error) {
+                        reject(new Error(e.data.error));
+                        return;
+                    }
+                    
+                    if (e.data.done) {
+                        worker.terminate();
+                        resolve();
+                        return;
+                    }
+                    
+                    if (e.data.data) {
+                        csvData.push(e.data.data);
+                        validationErrors.push(e.data.errors);
+                        updateProgress(e.data.progress);
+                    }
+                };
+                
+                worker.onerror = (error) => {
+                    worker.terminate();
+                    reject(error);
+                };
+            });
+        }
+
+        function renderVirtualScroll() {
+            const scrollTop = $('.virtual-scroll').scrollTop();
+            const start = Math.floor(scrollTop / rowHeight);
+            const end = start + visibleRows + 5;
+            renderChunk(start, end);
+        }
+
+        function renderChunk(start, end) {
+            const chunk = csvData.slice(start, end);
+            const $tbody = $('#tableBody').empty();
+            
+            chunk.forEach((row, index) => {
+                const $tr = $('<tr>');
+                countryConfig[currentCountry].output.forEach(col => {
+                    const isInvalid = validationErrors[start + index]?.includes(col);
+                    $tr.append($('<td>').addClass(isInvalid ? 'invalid' : '').text(row[col]));
+                });
+                $tbody.append($tr);
+            });
+            
+            $('#tableHeader').html(
+                `<tr>${countryConfig[currentCountry].output.map(col => `<th>${col}</th>`).join('')}</tr>`
+            );
+        }
+
+        function downloadData(type, format) {
+            const filtered = csvData.filter((_, i) => 
+                type === 'valid' ? !validationErrors[i].length : validationErrors[i].length
+            );
+
+            if (format === 'csv') {
+                const csvContent = [
+                    countryConfig[currentCountry].output.join(','),
+                    ...filtered.map(row => 
+                        countryConfig[currentCountry].output.map(col => row[col]).join(',')
+                    )
+                ].join('\n');
+                downloadBlob(csvContent, `${type}_records.csv`);
+            } else {
+                const wsData = [
+                    countryConfig[currentCountry].output,
+                    ...filtered.map(row => 
+                        countryConfig[currentCountry].output.map(col => row[col])
+                    )
+                ];
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Data');
+                XLSX.writeFile(wb, `${type}_records.xlsx`);
+            }
+        }
+
+        // Helper functions
+        function validateFile(file) {
+            if (!file?.name.endsWith('.csv')) {
+                showError('Please upload a valid CSV file');
+                return false;
+            }
+            return true;
+        }
+
+        function updateProgress(percent) {
+            $('.progress-bar').css('width', `${percent}%`);
+        }
+
+        function showLoading(show) {
+            $('#uploadBtn').prop('disabled', show);
+            $('button').not('#uploadBtn').prop('disabled', show);
+            $('.progress-container').toggle(show);
+        }
+
+        function showError(message) {
+            $('.error').text(message).show().delay(5000).fadeOut();
+        }
+
+        function downloadBlob(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function handleScroll() {
+            requestAnimationFrame(renderVirtualScroll);
+        }
+
+        function updateCountry() {
+            currentCountry = $('#countrySelect').val();
+            csvData = [];
+            validationErrors = [];
+            renderVirtualScroll();
+        }
+    </script>
+</body>
+</html>
