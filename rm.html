@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV File Processor</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        #results {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .error {
+            background-color: #ffdddd;
+        }
+        .stats {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+        }
+        #progress {
+            width: 100%;
+            background-color: #f1f1f1;
+            margin-top: 10px;
+        }
+        #progressBar {
+            width: 0%;
+            height: 30px;
+            background-color: #4CAF50;
+            text-align: center;
+            line-height: 30px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CSV File Processor</h1>
+        
+        <div class="upload-section">
+            <h2>Upload CSV File</h2>
+            <input type="file" id="csvFile" accept=".csv">
+            <button id="processBtn">Process File</button>
+            <div id="progress" style="display: none;">
+                <div id="progressBar">0%</div>
+            </div>
+        </div>
+        
+        <div id="results"></div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            let internalUsersMap = new Map();
+            let externalRecords = [];
+            let validationErrors = [];
+            
+            // Email validation functions
+            function isValidEmail(email) {
+                if (!email) return false;
+                const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return re.test(email);
+            }
+            
+            function isValidRmEmail(email) {
+                if (!email) return false;
+                const re = /^[^\s@]+@[^\s@]+\.dd\.com$/;
+                return re.test(email);
+            }
+            
+            // Process CSV file
+            $('#processBtn').click(function() {
+                const file = $('#csvFile')[0].files[0];
+                if (!file) {
+                    alert('Please select a CSV file first.');
+                    return;
+                }
+                
+                $('#progress').show();
+                $('#progressBar').css('width', '0%').text('0%');
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const content = e.target.result;
+                    processCSV(content);
+                };
+                reader.readAsText(file);
+            });
+            
+            function processCSV(content) {
+                internalUsersMap.clear();
+                externalRecords = [];
+                validationErrors = [];
+                
+                const lines = content.split('\n');
+                if (lines.length === 0) {
+                    alert('Empty file');
+                    return;
+                }
+                
+                // Extract headers
+                const headers = lines[0].split(',').map(h => h.trim());
+                
+                // Find column indices
+                const colIndices = {
+                    uniqueId: headers.findIndex(h => h === 'Unique ID'),
+                    userType: headers.findIndex(h => h === 'User Type'),
+                    accountNumber: headers.findIndex(h => h === 'Account Number'),
+                    firstName: headers.findIndex(h => h === 'First Name'),
+                    middleName: headers.findIndex(h => h === 'Middle Name'),
+                    lastName: headers.findIndex(h => h === 'Last Name'),
+                    email: headers.findIndex(h => h === 'Email Address'),
+                    defaultRm: headers.findIndex(h => h === 'Default RM')
+                };
+                
+                // Validate that required columns exist
+                if (colIndices.uniqueId === -1 || colIndices.userType === -1 || 
+                    colIndices.firstName === -1 || colIndices.lastName === -1 || 
+                    colIndices.email === -1 || colIndices.defaultRm === -1) {
+                    alert('CSV file is missing required columns. Please check the headers.');
+                    return;
+                }
+                
+                // Process records in chunks to avoid blocking the UI
+                const chunkSize = 10000;
+                const totalRecords = lines.length - 1; // exclude header
+                let processedRecords = 0;
+                
+                function processChunk(startIdx) {
+                    const endIdx = Math.min(startIdx + chunkSize, totalRecords);
+                    
+                    for (let i = startIdx; i < endIdx; i++) {
+                        if (i === 0) continue; // skip header
+                        
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        
+                        const values = parseCSVLine(line);
+                        
+                        // Check if we have enough columns
+                        if (values.length <= Math.max(...Object.values(colIndices))) {
+                            continue;
+                        }
+                        
+                        const userType = values[colIndices.userType].trim();
+                        const uniqueId = values[colIndices.uniqueId].trim();
+                        const email = values[colIndices.email].trim();
+                        
+                        if (userType === 'Internal') {
+                            // Add to internal users map
+                            if (uniqueId && email) {
+                                internalUsersMap.set(uniqueId, email);
+                            }
+                        } else if (userType === 'External') {
+                            // Process external user record
+                            const accountNumber = colIndices.accountNumber !== -1 ? values[colIndices.accountNumber].trim() : '';
+                            const middleName = colIndices.middleName !== -1 ? values[colIndices.middleName].trim() : '';
+                            const defaultRm = values[colIndices.defaultRm].trim();
+                            
+                            const record = {
+                                'Party ID': uniqueId,
+                                'Account Number': accountNumber,
+                                'Party First Name': values[colIndices.firstName].trim(),
+                                'Party Middle Name': middleName,
+                                'Party Last Name': values[colIndices.lastName].trim(),
+                                'Email': email,
+                                'RM Email': internalUsersMap.get(defaultRm) || ''
+                            };
+                            
+                            // Validate the record
+                            const errors = validateRecord(record);
+                            if (errors.length > 0) {
+                                validationErrors.push({ record, errors });
+                            }
+                            
+                            externalRecords.push(record);
+                        }
+                        
+                        processedRecords++;
+                        
+                        // Update progress every 1000 records
+                        if (processedRecords % 1000 === 0) {
+                            const progress = Math.round((processedRecords / totalRecords) * 100);
+                            $('#progressBar').css('width', progress + '%').text(progress + '%');
+                        }
+                    }
+                    
+                    // Process next chunk if there are more records
+                    if (endIdx < totalRecords) {
+                        setTimeout(() => processChunk(endIdx), 0);
+                    } else {
+                        // Processing complete
+                        $('#progressBar').css('width', '100%').text('100%');
+                        displayResults();
+                    }
+                }
+                
+                // Start processing
+                processChunk(1);
+            }
+            
+            function parseCSVLine(line) {
+                const values = [];
+                let current = '';
+                let inQuotes = false;
+                
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        values.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                
+                values.push(current); // Add last value
+                return values.map(v => v.trim().replace(/^"(.*)"$/, '$1'));
+            }
+            
+            function validateRecord(record) {
+                const errors = [];
+                
+                // Party ID validation
+                if (!record['Party ID']) {
+                    errors.push('Party ID is required');
+                }
+                
+                // Name validation
+                if (!record['Party First Name'] && !record['Party Last Name']) {
+                    errors.push('Either Party First Name or Party Last Name is required');
+                }
+                
+                // Email validation
+                if (!isValidEmail(record['Email'])) {
+                    errors.push('Invalid Email format');
+                }
+                
+                // RM Email validation
+                if (record['RM Email'] && !isValidRmEmail(record['RM Email'])) {
+                    errors.push('RM Email must have dd.com domain');
+                }
+                
+                return errors;
+            }
+            
+            function displayResults() {
+                const $results = $('#results');
+                $results.empty();
+                
+                // Display statistics
+                const stats = `
+                    <div class="stats">
+                        <strong>Processing Complete</strong><br>
+                        Total External Records Processed: ${externalRecords.length}<br>
+                        Records with Validation Errors: ${validationErrors.length}<br>
+                        Internal Users Mapped: ${internalUsersMap.size}
+                    </div>
+                `;
+                $results.append(stats);
+                
+                if (externalRecords.length === 0) {
+                    $results.append('<p>No external records found in the file.</p>');
+                    return;
+                }
+                
+                // Create table
+                const $table = $('<table>');
+                const $thead = $('<thead>');
+                const $tbody = $('<tbody>');
+                
+                // Create header row
+                const $headerRow = $('<tr>');
+                Object.keys(externalRecords[0]).forEach(header => {
+                    $headerRow.append($('<th>').text(header));
+                });
+                $thead.append($headerRow);
+                $table.append($thead);
+                
+                // Create data rows
+                externalRecords.forEach((record, index) => {
+                    const $row = $('<tr>');
+                    const recordErrors = validationErrors.find(e => e.record === record)?.errors || [];
+                    
+                    Object.entries(record).forEach(([key, value]) => {
+                        const $cell = $('<td>').text(value || '');
+                        
+                        // Highlight cells with validation errors
+                        if (recordErrors.length > 0) {
+                            if (key === 'Party ID' && !record['Party ID']) {
+                                $cell.addClass('error');
+                            } else if ((key === 'Party First Name' || key === 'Party Last Name') && 
+                                      !record['Party First Name'] && !record['Party Last Name']) {
+                                $cell.addClass('error');
+                            } else if (key === 'Email' && !isValidEmail(record['Email'])) {
+                                $cell.addClass('error');
+                            } else if (key === 'RM Email' && record['RM Email'] && !isValidRmEmail(record['RM Email'])) {
+                                $cell.addClass('error');
+                            }
+                        }
+                        
+                        $row.append($cell);
+                    });
+                    
+                    $tbody.append($row);
+                });
+                
+                $table.append($tbody);
+                $results.append($table);
+                
+                // Add error legend
+                if (validationErrors.length > 0) {
+                    $results.append(`
+                        <div class="stats">
+                            <strong>Validation Errors Legend</strong><br>
+                            <span class="error" style="padding: 2px 5px;">Red cells</span> indicate validation errors.
+                        </div>
+                    `);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
