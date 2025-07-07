@@ -1,0 +1,309 @@
+import java.io.*;
+import java.nio.file.*;
+
+public class FullFrontendGeneratorWithFixes {
+    public static void main(String[] args) throws Exception {
+        String root = "kanban-frontend";
+        mkdir(root);
+
+        write(root, "index.html", html());
+        write(root, "styles.css", css());
+        write(root, "scripts.js", js());
+
+        System.out.println("✅ Frontend project (with fixes) created in: " + root);
+    }
+
+    static void mkdir(String dir) throws IOException {
+        Files.createDirectories(Paths.get(dir));
+    }
+
+    static void write(String dir, String fileName, String content) throws IOException {
+        Path path = Paths.get(dir, fileName);
+        Files.write(path, content.getBytes());
+        System.out.println("📝 Created: " + path);
+    }
+
+    static String html() {
+        return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanban Board</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+<link rel="stylesheet" href="styles.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css">
+</head>
+<body class="hold-transition sidebar-mini">
+<div class="wrapper">
+<section class="content-header">
+<div class="container-fluid d-flex justify-content-between align-items-center">
+<h1>Kanban Board</h1>
+<button class="btn btn-success" id="newTaskBtn">+ New Task</button>
+</div>
+</section>
+<section class="content">
+<div class="container-fluid">
+<div class="row" style="height:80vh;">
+<div class="col">
+<div class="card card-primary h-100">
+<div class="card-header bg-primary">Open</div>
+<div class="card-body connectedSortable" id="open"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-warning h-100">
+<div class="card-header bg-warning">In Progress</div>
+<div class="card-body connectedSortable" id="inprogress"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-info h-100">
+<div class="card-header bg-info">Hold</div>
+<div class="card-body connectedSortable" id="hold"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-success h-100">
+<div class="card-header bg-success">Completed</div>
+<div class="card-body connectedSortable" id="completed"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="taskModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Task</h5></div>
+      <div class="modal-body">
+        <form id="taskForm">
+          <input type="hidden" id="taskId">
+          <div class="form-group">
+            <label>Application Name</label>
+            <input class="form-control mb-2" id="applicationName" required>
+          </div>
+          <div class="form-group">
+            <label>Task Name</label>
+            <input class="form-control mb-2" id="taskName" required>
+          </div>
+          <div class="form-group">
+            <label>Priority</label>
+            <select class="form-control mb-2" id="priority">
+              <option>Low</option><option>Medium</option><option>High</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Close Date</label>
+            <input class="form-control mb-2" type="date" id="closeDate">
+          </div>
+          <div class="form-group">
+            <label>Owner</label>
+            <input class="form-control mb-2" id="owner">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea class="form-control mb-2" id="description"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveTask">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="scripts.js"></script>
+</body>
+</html>
+""";
+    }
+
+    static String css() {
+        return """
+html, body {
+    height: 100%;
+}
+.card-body {
+    overflow-y: auto;
+    height: calc(100% - 40px);
+}
+.task-card {
+    margin: 5px;
+    padding: 5px;
+    color: #fff;
+    cursor: move;
+    position: relative;
+}
+.task-low { background-color: green; }
+.task-medium { background-color: orange; }
+.task-high { background-color: red; }
+.delete-btn {
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+}
+""";
+    }
+
+    static String js() {
+        return """
+$(function() {
+    loadTasks();
+
+    $(".connectedSortable").sortable({
+        connectWith: ".connectedSortable",
+        stop: function(event, ui) {
+            const id = ui.item.data("id");
+            const newStatus = ui.item.parent().attr("id");
+            updateStatus(id, newStatus);
+        }
+    }).disableSelection();
+
+    $("#newTaskBtn").click(function () {
+        clearModal();
+        $("#taskModal").show();
+    });
+
+    $("#saveTask").click(function() {
+        const closeDate = $("#closeDate").val();
+        if (closeDate) {
+            const closeDateObj = new Date(closeDate);
+            const today = new Date();
+            const oneWeekAgo = new Date();
+            oneWeekAgo.setDate(today.getDate() - 7);
+            if (closeDateObj < oneWeekAgo) {
+                alert("Close date cannot be more than a week in the past.");
+                return;
+            }
+        }
+
+        const task = {
+            id: $("#taskId").val() || null,
+            applicationName: $("#applicationName").val(),
+            taskName: $("#taskName").val(),
+            priority: $("#priority").val(),
+            closeDate: closeDate || null,
+            description: $("#description").val(),
+            owner: $("#owner").val(),
+            status: $("#taskId").val() ? null : "open"
+        };
+
+        const method = task.id ? "PUT" : "POST";
+        const url = task.id ? "/api/tasks/" + task.id : "/api/tasks";
+
+        $.ajax({
+            url,
+            type: method,
+            data: JSON.stringify(task),
+            contentType: "application/json",
+            success: function() {
+                $("#taskModal").hide();
+                loadTasks();
+            }
+        });
+    });
+
+    $(document).on("dblclick", ".task-card", function() {
+        const id = $(this).data("id");
+        $.get("/api/tasks", function(data) {
+            const task = data.find(t => t.id === id);
+            if (task) {
+                $("#taskId").val(task.id);
+                $("#applicationName").val(task.applicationName);
+                $("#taskName").val(task.taskName);
+                $("#priority").val(task.priority);
+                $("#closeDate").val(task.closeDate || "");
+                $("#owner").val(task.owner);
+                $("#description").val(task.description);
+                $("#taskModal").show();
+            }
+        });
+    });
+
+    $(document).on("click", ".delete-btn", function(e) {
+        e.stopPropagation();
+        const id = $(this).parent().data("id");
+        if (confirm("Delete this task?")) {
+            $.ajax({
+                url: "/api/tasks/" + id,
+                type: "DELETE",
+                success: function() {
+                    loadTasks();
+                }
+            });
+        }
+    });
+
+    function updateStatus(id, status) {
+        $.get("/api/tasks", function(data) {
+            const task = data.find(t => t.id === id);
+            if (task) {
+                task.status = status;
+                $.ajax({
+                    url: "/api/tasks/" + id,
+                    type: "PUT",
+                    data: JSON.stringify(task),
+                    contentType: "application/json",
+                    success: function() {
+                        loadTasks();
+                    }
+                });
+            }
+        });
+    }
+
+    function loadTasks() {
+        $(".connectedSortable").empty();
+        $.get("/api/tasks", function(data) {
+            data.forEach(task => {
+                const card = $("<div>").addClass("task-card")
+                    .addClass(priorityClass(task.priority))
+                    .attr("data-id", task.id)
+                    .text(task.applicationName + " - " + task.taskName + " (" + task.owner + ")");
+
+                const delBtn = $("<button>").addClass("delete-btn").html("&times;");
+                card.append(delBtn);
+
+                $("#" + task.status.toLowerCase()).append(card);
+            });
+        });
+    }
+
+    function priorityClass(p) {
+        if (p === "Low") return "task-low";
+        if (p === "Medium") return "task-medium";
+        if (p === "High") return "task-high";
+        return "";
+    }
+
+    $(window).click(function(e) {
+        if ($(e.target).is("#taskModal")) {
+            $("#taskModal").hide();
+        }
+    });
+
+    function clearModal() {
+        $("#taskId").val("");
+        $("#applicationName").val("");
+        $("#taskName").val("");
+        $("#priority").val("Low");
+        $("#closeDate").val("");
+        $("#owner").val("");
+        $("#description").val("");
+    }
+});
+""";
+    }
+}
