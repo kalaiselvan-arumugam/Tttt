@@ -1,0 +1,242 @@
+import java.io.*;
+import java.nio.file.*;
+
+public class FrontendWithCreateButtonGenerator {
+    public static void main(String[] args) throws Exception {
+        String root = "kanban-frontend";
+        mkdir(root);
+
+        write(root, "index.html", html());
+        write(root, "styles.css", css());
+        write(root, "scripts.js", js());
+
+        System.out.println("✅ Frontend project (with +New Task) created in: " + root);
+    }
+
+    static void mkdir(String dir) throws IOException {
+        Files.createDirectories(Paths.get(dir));
+    }
+
+    static void write(String dir, String fileName, String content) throws IOException {
+        Path path = Paths.get(dir, fileName);
+        Files.write(path, content.getBytes());
+        System.out.println("📝 Created: " + path);
+    }
+
+    static String html() {
+        return """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kanban Board</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+<link rel="stylesheet" href="styles.css">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jquery-ui-dist/jquery-ui.min.css">
+</head>
+<body class="hold-transition sidebar-mini">
+<div class="wrapper">
+<section class="content-header">
+<div class="container-fluid d-flex justify-content-between align-items-center">
+<h1>Kanban Board</h1>
+<button class="btn btn-success" id="newTaskBtn">+ New Task</button>
+</div>
+</section>
+<section class="content">
+<div class="container-fluid">
+<div class="row">
+<div class="col">
+<div class="card card-primary">
+<div class="card-header bg-primary">Open</div>
+<div class="card-body connectedSortable" id="open"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-warning">
+<div class="card-header bg-warning">In Progress</div>
+<div class="card-body connectedSortable" id="inprogress"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-info">
+<div class="card-header bg-info">Hold</div>
+<div class="card-body connectedSortable" id="hold"></div>
+</div>
+</div>
+<div class="col">
+<div class="card card-success">
+<div class="card-header bg-success">Completed</div>
+<div class="card-body connectedSortable" id="completed"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="taskModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Task</h5></div>
+      <div class="modal-body">
+        <form id="taskForm">
+          <input type="hidden" id="taskId">
+          <input class="form-control mb-2" placeholder="Application Name" id="applicationName" required>
+          <input class="form-control mb-2" placeholder="Task Name" id="taskName" required>
+          <select class="form-control mb-2" id="priority">
+            <option>Low</option><option>Medium</option><option>High</option>
+          </select>
+          <input class="form-control mb-2" type="date" id="closeDate">
+          <input class="form-control mb-2" placeholder="Owner" id="owner">
+          <textarea class="form-control mb-2" placeholder="Description" id="description"></textarea>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="saveTask">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="scripts.js"></script>
+</body>
+</html>
+""";
+    }
+
+    static String css() {
+        return """
+.card-body {
+    min-height: 300px;
+}
+.task-card {
+    margin: 5px;
+    padding: 5px;
+    color: #fff;
+    cursor: move;
+}
+.task-low { background-color: green; }
+.task-medium { background-color: orange; }
+.task-high { background-color: red; }
+""";
+    }
+
+    static String js() {
+        return """
+$(function() {
+    loadTasks();
+
+    $(".connectedSortable").sortable({
+        connectWith: ".connectedSortable",
+        stop: function(event, ui) {
+            const id = ui.item.data("id");
+            const newStatus = ui.item.parent().attr("id");
+            updateStatus(id, newStatus);
+        }
+    }).disableSelection();
+
+    $("#newTaskBtn").click(function () {
+        $("#taskId").val("");
+        $("#applicationName").val("");
+        $("#taskName").val("");
+        $("#priority").val("Low");
+        $("#closeDate").val("");
+        $("#owner").val("");
+        $("#description").val("");
+        $("#taskModal").show();
+    });
+
+    $("#saveTask").click(function() {
+        const task = {
+            id: $("#taskId").val() || null,
+            applicationName: $("#applicationName").val(),
+            taskName: $("#taskName").val(),
+            priority: $("#priority").val(),
+            closeDate: $("#closeDate").val() || null,
+            description: $("#description").val(),
+            owner: $("#owner").val(),
+            status: "open"
+        };
+
+        const method = task.id ? "PUT" : "POST";
+        const url = task.id ? "/api/tasks/" + task.id : "/api/tasks";
+
+        $.ajax({
+            url,
+            type: method,
+            data: JSON.stringify(task),
+            contentType: "application/json",
+            success: function() {
+                $("#taskModal").hide();
+                loadTasks();
+            }
+        });
+    });
+
+    $(document).on("dblclick", ".task-card", function() {
+        const id = $(this).data("id");
+        $.get("/api/tasks", function(data) {
+            const task = data.find(t => t.id === id);
+            if (task) {
+                $("#taskId").val(task.id);
+                $("#applicationName").val(task.applicationName);
+                $("#taskName").val(task.taskName);
+                $("#priority").val(task.priority);
+                $("#closeDate").val(task.closeDate || "");
+                $("#owner").val(task.owner);
+                $("#description").val(task.description);
+                $("#taskModal").show();
+            }
+        });
+    });
+
+    function updateStatus(id, status) {
+        $.get("/api/tasks", function(data) {
+            const task = data.find(t => t.id === id);
+            if (task) {
+                task.status = status;
+                $.ajax({
+                    url: "/api/tasks/" + id,
+                    type: "PUT",
+                    data: JSON.stringify(task),
+                    contentType: "application/json",
+                    success: function() {
+                        loadTasks();
+                    }
+                });
+            }
+        });
+    }
+
+    function loadTasks() {
+        $(".connectedSortable").empty();
+        $.get("/api/tasks", function(data) {
+            data.forEach(task => {
+                const card = $("<div>").addClass("task-card")
+                    .addClass(priorityClass(task.priority))
+                    .text(task.applicationName + " - " + task.taskName + " (" + task.owner + ")")
+                    .attr("data-id", task.id);
+                $("#" + task.status.toLowerCase()).append(card);
+            });
+        });
+    }
+
+    function priorityClass(p) {
+        if (p === "Low") return "task-low";
+        if (p === "Medium") return "task-medium";
+        if (p === "High") return "task-high";
+        return "";
+    }
+
+    $(window).click(function(e) {
+        if ($(e.target).is("#taskModal")) {
+            $("#taskModal").hide();
+        }
+    });
+});
+""";
+    }
+}
