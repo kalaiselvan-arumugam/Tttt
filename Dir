@@ -1,0 +1,287 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: Root folder
+set ROOT=kanban-board
+
+echo Creating project folders...
+mkdir %ROOT%\src\main\java\com\example\kanban\controller
+mkdir %ROOT%\src\main\java\com\example\kanban\model
+mkdir %ROOT%\src\main\java\com\example\kanban\repository
+mkdir %ROOT%\src\main\java\com\example\kanban\service
+mkdir %ROOT%\src\main\resources\static
+mkdir %ROOT%\src\test\java\com\example\kanban\controller
+
+:: Helper to write text to file
+echo Writing files...
+
+:: pom.xml
+(
+echo ^<?xml version="1.0" encoding="UTF-8"?^>
+echo ^<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+echo     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"^>
+echo     ^<modelVersion^>4.0.0^</modelVersion^>
+echo     ^<groupId^>com.example^</groupId^>
+echo     ^<artifactId^>kanban-board^</artifactId^>
+echo     ^<version^>0.0.1-SNAPSHOT^</version^>
+echo     ^<dependencies^>
+echo         ^<dependency^>
+echo             ^<groupId^>org.springframework.boot^</groupId^>
+echo             ^<artifactId^>spring-boot-starter-web^</artifactId^>
+echo         ^</dependency^>
+echo         ^<dependency^>
+echo             ^<groupId^>org.springframework.boot^</groupId^>
+echo             ^<artifactId^>spring-boot-starter-data-jpa^</artifactId^>
+echo         ^</dependency^>
+echo         ^<dependency^>
+echo             ^<groupId^>com.h2database^</groupId^>
+echo             ^<artifactId^>h2^</artifactId^>
+echo             ^<scope^>runtime^</scope^>
+echo         ^</dependency^>
+echo         ^<dependency^>
+echo             ^<groupId^>org.springframework.boot^</groupId^>
+echo             ^<artifactId^>spring-boot-starter-test^</artifactId^>
+echo             ^<scope^>test^</scope^>
+echo         ^</dependency^>
+echo     ^</dependencies^>
+echo ^</project^>
+) > %ROOT%\pom.xml
+
+:: application.properties
+(
+echo spring.datasource.url=jdbc:h2:file:./kanban-db
+echo spring.datasource.driverClassName=org.h2.Driver
+echo spring.datasource.username=sa
+echo spring.datasource.password=
+echo spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+echo spring.h2.console.enabled=true
+echo spring.jpa.show-sql=true
+echo spring.jpa.hibernate.ddl-auto=update
+) > %ROOT%\src\main\resources\application.properties
+
+:: KanbanApplication.java
+(
+echo package com.example.kanban;
+echo.
+echo import org.springframework.boot.SpringApplication;
+echo import org.springframework.boot.autoconfigure.SpringBootApplication;
+echo.
+echo @SpringBootApplication
+echo public class KanbanApplication {
+echo     public static void main(String[] args) {
+echo         SpringApplication.run(KanbanApplication.class, args);
+echo     }
+echo }
+) > %ROOT%\src\main\java\com\example\kanban\KanbanApplication.java
+
+:: Task.java
+(
+echo package com.example.kanban.model;
+echo.
+echo import jakarta.persistence.*;
+echo import java.time.LocalDateTime;
+echo import java.time.LocalDate;
+echo.
+echo @Entity
+echo public class Task {
+echo     @Id
+echo     @GeneratedValue(strategy = GenerationType.IDENTITY)
+echo     private Long id;
+echo.
+echo     private String applicationName;
+echo     private String taskName;
+echo     private String priority;
+echo     private LocalDateTime createdDate;
+echo     private LocalDate closeDate;
+echo     private String description;
+echo     private String owner;
+echo     private String status;
+echo.
+echo     @PrePersist
+echo     public void prePersist() {
+echo         this.createdDate = LocalDateTime.now();
+echo         if (this.status == null) {
+echo             this.status = "Open";
+echo         }
+echo     }
+echo.
+echo     // getters and setters
+echo }
+) > %ROOT%\src\main\java\com\example\kanban\model\Task.java
+
+:: TaskRepository.java
+(
+echo package com.example.kanban.repository;
+echo.
+echo import com.example.kanban.model.Task;
+echo import org.springframework.data.jpa.repository.JpaRepository;
+echo.
+echo public interface TaskRepository extends JpaRepository<Task, Long> {
+echo }
+) > %ROOT%\src\main\java\com\example\kanban\repository\TaskRepository.java
+
+:: TaskService.java
+(
+echo package com.example.kanban.service;
+echo.
+echo import com.example.kanban.model.Task;
+echo import com.example.kanban.repository.TaskRepository;
+echo import org.springframework.stereotype.Service;
+echo.
+echo import java.util.List;
+echo import java.util.Optional;
+echo.
+echo @Service
+echo public class TaskService {
+echo     private final TaskRepository repository;
+echo.
+echo     public TaskService(TaskRepository repository) {
+echo         this.repository = repository;
+echo     }
+echo.
+echo     public Task create(Task task) {
+echo         return repository.save(task);
+echo     }
+echo.
+echo     public List<Task> findAll() {
+echo         return repository.findAll();
+echo     }
+echo.
+echo     public Optional<Task> findById(Long id) {
+echo         return repository.findById(id);
+echo     }
+echo.
+echo     public Task update(Long id, Task updated) {
+echo         return repository.findById(id).map(task -> {
+echo             task.setApplicationName(updated.getApplicationName());
+echo             task.setTaskName(updated.getTaskName());
+echo             task.setPriority(updated.getPriority());
+echo             task.setCloseDate(updated.getCloseDate());
+echo             task.setDescription(updated.getDescription());
+echo             task.setOwner(updated.getOwner());
+echo             task.setStatus(updated.getStatus());
+echo             return repository.save(task);
+echo         }).orElseThrow(() -> new RuntimeException("Task not found with id " + id));
+echo     }
+echo.
+echo     public void delete(Long id) {
+echo         repository.deleteById(id);
+echo     }
+echo }
+) > %ROOT%\src\main\java\com\example\kanban\service\TaskService.java
+
+:: TaskController.java
+(
+echo package com.example.kanban.controller;
+echo.
+echo import com.example.kanban.model.Task;
+echo import com.example.kanban.service.TaskService;
+echo import org.springframework.http.ResponseEntity;
+echo import org.springframework.web.bind.annotation.*;
+echo.
+echo import java.util.List;
+echo.
+echo @RestController
+echo @RequestMapping("/api/tasks")
+echo @CrossOrigin
+echo public class TaskController {
+echo     private final TaskService service;
+echo.
+echo     public TaskController(TaskService service) {
+echo         this.service = service;
+echo     }
+echo.
+echo     @PostMapping
+echo     public ResponseEntity<Task> create(@RequestBody Task task) {
+echo         return ResponseEntity.ok(service.create(task));
+echo     }
+echo.
+echo     @GetMapping
+echo     public ResponseEntity<List<Task>> getAll() {
+echo         return ResponseEntity.ok(service.findAll());
+echo     }
+echo.
+echo     @PutMapping("/{id}")
+echo     public ResponseEntity<Task> update(@PathVariable Long id, @RequestBody Task task) {
+echo         return ResponseEntity.ok(service.update(id, task));
+echo     }
+echo.
+echo     @DeleteMapping("/{id}")
+echo     public ResponseEntity<?> delete(@PathVariable Long id) {
+echo         service.delete(id);
+echo         return ResponseEntity.ok().body("{\"message\":\"Task deleted successfully\",\"id\":" + id + "}");
+echo     }
+echo }
+) > %ROOT%\src\main\java\com\example\kanban\controller\TaskController.java
+
+:: TaskControllerTest.java
+(
+echo package com.example.kanban.controller;
+echo.
+echo import com.example.kanban.model.Task;
+echo import com.example.kanban.repository.TaskRepository;
+echo import com.fasterxml.jackson.databind.ObjectMapper;
+echo import org.junit.jupiter.api.Test;
+echo import org.springframework.beans.factory.annotation.Autowired;
+echo import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+echo import org.springframework.boot.test.context.SpringBootTest;
+echo import org.springframework.http.MediaType;
+echo import org.springframework.test.web.servlet.MockMvc;
+echo.
+echo import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+echo import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+echo.
+echo @SpringBootTest
+echo @AutoConfigureMockMvc
+echo class TaskControllerTest {
+echo.
+echo     @Autowired private MockMvc mockMvc;
+echo     @Autowired private ObjectMapper mapper;
+echo     @Autowired private TaskRepository repository;
+echo.
+echo     @Test
+echo     void createAndGetTask() throws Exception {
+echo         Task task = new Task();
+echo         task.setApplicationName("App");
+echo         task.setTaskName("Task");
+echo         task.setPriority("High");
+echo         task.setDescription("Test");
+echo         task.setOwner("Alice");
+echo.
+echo         mockMvc.perform(post("/api/tasks")
+echo                 .contentType(MediaType.APPLICATION_JSON)
+echo                 .content(mapper.writeValueAsString(task)))
+echo                 .andExpect(status().isOk())
+echo                 .andExpect(jsonPath("$.id").exists());
+echo.
+echo         mockMvc.perform(get("/api/tasks"))
+echo                 .andExpect(status().isOk());
+echo     }
+echo }
+) > %ROOT%\src\test\java\com\example\kanban\controller\TaskControllerTest.java
+
+:: README.md
+(
+echo # Kanban Board Application
+echo.
+echo ### 🛠️ Run
+echo.
+echo mvn spring-boot:run
+echo.
+echo Open: http://localhost:8080
+echo H2 Console: http://localhost:8080/h2-console
+echo.
+echo ### 📋 API Endpoints
+echo.
+echo - POST /api/tasks → create task
+echo - GET /api/tasks → fetch all tasks
+echo - PUT /api/tasks/{id} → update task
+echo - DELETE /api/tasks/{id} → delete task
+echo.
+echo ### 🧪 Test
+echo.
+echo mvn test
+) > %ROOT%\README.md
+
+echo Done!
+pause
