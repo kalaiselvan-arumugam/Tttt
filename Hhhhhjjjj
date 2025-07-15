@@ -1,0 +1,33 @@
+@Bean
+SecurityFilterChain samlSecurityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .saml2Login(saml2 -> saml2
+            .authenticationRequestContext(context -> {
+                // Allow both Password and Windows
+                context.setAuthnRequestCustomizer(authnRequest -> {
+                    authnRequest.requestedAuthnContext()
+                        .comparison("exact")
+                        .authnContextClassRefs(Arrays.asList(
+                            "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
+                            "urn:federation:authentication:windows"
+                        ));
+                });
+            })
+        );
+    return http.build();
+}
+
+
+
+@Bean
+SecurityFilterChain samlSecurityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .saml2Login(saml2 -> saml2
+            .authenticationRequestContext(context -> {
+                context.setAuthnRequestCustomizer(authnRequest -> {
+                    authnRequest.requestedAuthnContext(null);
+                });
+            })
+        );
+    return http.build();
+}
