@@ -1,0 +1,80 @@
+package com.example.demo.controller;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.List;
+
+@Controller
+public class FileUploadController {
+
+    private static final long MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB
+    private static final String UPLOAD_DIR = "uploads/";
+
+    @PostMapping("/upload")
+    public String handleFileUpload(@RequestParam("files") List<MultipartFile> files,
+                                   RedirectAttributes redirectAttributes) {
+
+        if (files.isEmpty()) {
+            redirectAttributes.addFlashAttribute("message", "No files selected.");
+            return "redirect:/";
+        }
+
+        if (files.size() > 10) {
+            redirectAttributes.addFlashAttribute("message", "Error: You can only upload up to 10 files.");
+            return "redirect:/";
+        }
+
+        long totalSize = 0;
+
+        for (MultipartFile file : files) {
+            String fileName = file.getOriginalFilename();
+
+            if (fileName == null || !fileName.toLowerCase().endsWith(".csv")) {
+                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " is not a CSV file.");
+                return "redirect:/";
+            }
+
+            String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+
+            if (!baseName.startsWith("SISC")) {
+                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " - Invalid file name (should start with 'SISC').");
+                return "redirect:/";
+            }
+
+            if (baseName.length() > 13) {
+                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " - File name too long (max 13 characters without extension).");
+                return "redirect:/";
+            }
+
+            totalSize += file.getSize();
+
+            if (totalSize > MAX_TOTAL_SIZE) {
+                redirectAttributes.addFlashAttribute("message", "Error: Total file size exceeds 10 MB after adding " + fileName);
+                return "redirect:/";
+            }
+        }
+
+        // Save files to disk
+        for (MultipartFile file : files) {
+            try {
+                File dir = new File(UPLOAD_DIR);
+                if (!dir.exists()) dir.mkdirs();
+
+                File dest = new File(UPLOAD_DIR + file.getOriginalFilename());
+                file.transferTo(dest);
+            } catch (IOException e) {
+                redirectAttributes.addFlashAttribute("message", "Error saving file: " + file.getOriginalFilename());
+                return "redirect:/";
+            }
+        }
+
+        redirectAttributes.addFlashAttribute("message", "All files uploaded successfully!");
+        return "redirect:/";
+    }
+}
