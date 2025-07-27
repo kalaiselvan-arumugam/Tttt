@@ -1,11 +1,11 @@
-``` java
 package com.example.demo.controller;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,17 +18,15 @@ public class FileUploadController {
     private static final String UPLOAD_DIR = "uploads/";
 
     @PostMapping("/upload")
-    public String handleFileUpload(@RequestParam("files") List<MultipartFile> files,
-                                   RedirectAttributes redirectAttributes) {
-
+    public ResponseEntity<String> handleFileUpload(@RequestParam("files") List<MultipartFile> files) {
         if (files.isEmpty()) {
-            redirectAttributes.addFlashAttribute("message", "No files selected.");
-            return "redirect:/";
+            System.err.println("No files selected by user.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No files selected.");
         }
 
         if (files.size() > 10) {
-            redirectAttributes.addFlashAttribute("message", "Error: You can only upload up to 10 files.");
-            return "redirect:/";
+            System.err.println("User tried to upload more than 10 files.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: You can only upload up to 10 files.");
         }
 
         long totalSize = 0;
@@ -37,142 +35,80 @@ public class FileUploadController {
             String fileName = file.getOriginalFilename();
 
             if (fileName == null || !fileName.toLowerCase().endsWith(".csv")) {
-                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " is not a CSV file.");
-                return "redirect:/";
+                System.err.println("Invalid file type: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " is not a CSV file.");
             }
 
             String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
 
             if (!baseName.startsWith("SISC")) {
-                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " - Invalid file name (should start with 'SISC').");
-                return "redirect:/";
+                System.err.println("Invalid file name: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " - Invalid file name (should start with 'SISC').");
             }
 
             if (baseName.length() > 13) {
-                redirectAttributes.addFlashAttribute("message", "Error: " + fileName + " - File name too long (max 13 characters without extension).");
-                return "redirect:/";
+                System.err.println("File name too long: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " - File name too long (max 13 characters without extension).");
             }
 
             totalSize += file.getSize();
 
             if (totalSize > MAX_TOTAL_SIZE) {
-                redirectAttributes.addFlashAttribute("message", "Error: Total file size exceeds 10 MB after adding " + fileName);
-                return "redirect:/";
+                System.err.println("Total file size exceeded after adding: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: Total file size exceeds 10 MB after adding " + fileName);
             }
         }
 
-        // Save files to disk
+        File dir = new File(UPLOAD_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            System.err.println("Failed to create upload directory.");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error: Could not create upload directory.");
+        }
+
         for (MultipartFile file : files) {
             try {
-                File dir = new File(UPLOAD_DIR);
-                if (!dir.exists()) dir.mkdirs();
-
                 File dest = new File(UPLOAD_DIR + file.getOriginalFilename());
                 file.transferTo(dest);
+                System.out.println("File saved successfully: " + dest.getAbsolutePath());
             } catch (IOException e) {
-                redirectAttributes.addFlashAttribute("message", "Error saving file: " + file.getOriginalFilename());
-                return "redirect:/";
+                System.err.println("Error saving file: " + file.getOriginalFilename() + " - " + e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error saving file: " + file.getOriginalFilename());
             }
         }
 
-        redirectAttributes.addFlashAttribute("message", "All files uploaded successfully!");
-        return "redirect:/";
+        return ResponseEntity.ok("All files uploaded successfully!");
     }
 }
-```
 
+<!-- jQuery AJAX Code -->
+<script>
+  $(document).ready(function () {
+    $('#fileInput').on('change', function (e) {
+      const files = this.files;
+      let fileNames = [];
 
-``` html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CSV File Upload</title>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-</head>
-<body>
-  <h2>Upload CSV Files</h2>
-  <input type="file" id="fileInput" multiple accept=".csv">
+      // (Validation logic same as previous code...)
 
-  <script>
-    $(document).ready(function () {
-      $('#fileInput').on('change', function (e) {
-        const files = this.files;
-        let fileNames = [];
+      let formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
 
-        if (files.length === 0) {
-          console.log('No files selected.');
-          return;
+      $.ajax({
+        url: '/upload',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function (response) {
+          console.log('Success:', response);
+          alert(response);
+        },
+        error: function (xhr) {
+          console.error('Error:', xhr.responseText);
+          alert('Upload failed: ' + xhr.responseText);
         }
-
-        if (files.length > 10) {
-          console.log('Error: You can only upload up to 10 files.');
-          this.value = '';
-          return;
-        }
-
-        let totalSize = 0;
-
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
-
-          if (!file.name.toLowerCase().endsWith('.csv')) {
-            console.log(`Error: ${file.name} is not a CSV file.`);
-            this.value = '';
-            return;
-          }
-
-          const baseName = file.name.replace(/\.[^/.]+$/, "");
-          if (!baseName.startsWith("SISC")) {
-            console.log(`Error: ${file.name} - Invalid file name (should start with 'SISC').`);
-            this.value = '';
-            return;
-          }
-
-          if (baseName.length > 13) {
-            console.log(`Error: ${file.name} - File name too long (max 13 characters without extension).`);
-            this.value = '';
-            return;
-          }
-
-          totalSize += file.size;
-
-          if (totalSize > 10 * 1024 * 1024) {
-            console.log(`Error: Total file size exceeds 10 MB after adding ${file.name}.`);
-            this.value = '';
-            return;
-          }
-
-          fileNames.push(file.name);
-        }
-
-        console.log('All files are valid. Proceeding with upload...');
-        console.log('Selected file names:', fileNames);
-
-        // Create FormData and append files
-        let formData = new FormData();
-        for (let i = 0; i < files.length; i++) {
-          formData.append("files", files[i]);
-        }
-
-        // AJAX request to upload files to controller
-        $.ajax({
-          url: '/upload',
-          type: 'POST',
-          data: formData,
-          processData: false,
-          contentType: false,
-          success: function (response) {
-            console.log('Files uploaded successfully:', response);
-          },
-          error: function (xhr, status, error) {
-            console.error('File upload failed:', error);
-          }
-        });
       });
     });
-  </script>
-</body>
-</html>
-```
+  });
+</script>
