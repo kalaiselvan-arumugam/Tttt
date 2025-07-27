@@ -1,0 +1,103 @@
+package com.example.demo.controller;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
+import java.util.List;
+
+@Controller
+public class FileUploadController {
+
+    @Value("${external.api.url}")
+    private String externalApiUrl; // e.g. http://localhost:8081/process
+
+    private static final long MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB
+
+    @PostMapping("/upload")
+    public ResponseEntity<String> handleFileUpload(@RequestParam("files") List<MultipartFile> files) {
+
+        if (files.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No files selected.");
+        }
+
+        if (files.size() > 10) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: You can only upload up to 10 files.");
+        }
+
+        long totalSize = 0;
+        for (MultipartFile file : files) {
+            String fileName = file.getOriginalFilename();
+
+            if (fileName == null || !fileName.toLowerCase().endsWith(".csv")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " is not a CSV file.");
+            }
+
+            String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
+
+            if (!baseName.startsWith("SISC")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " must start with 'SISC'.");
+            }
+
+            if (baseName.length() > 13) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " name too long.");
+            }
+
+            totalSize += file.getSize();
+            if (totalSize > MAX_TOTAL_SIZE) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Error: Total file size exceeds 10 MB.");
+            }
+        }
+
+        // ✅ Call external API and return its response
+        return callExternalApi(files);
+    }
+
+    /**
+     * 📌 Sends files to an external API using Apache HttpClient
+     */
+    private ResponseEntity<String> callExternalApi(List<MultipartFile> files) {
+        try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+            HttpPost uploadPost = new HttpPost(externalApiUrl);
+
+            MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+            for (MultipartFile file : files) {
+                builder.addBinaryBody(
+                        "files",
+                        file.getBytes(),
+                        ContentType.MULTIPART_FORM_DATA,
+                        file.getOriginalFilename()
+                );
+            }
+
+            HttpEntity multipart = builder.build();
+            uploadPost.setEntity(multipart);
+
+            try (CloseableHttpResponse response = httpClient.execute(uploadPost)) {
+                int statusCode = response.getStatusLine().getStatusCode();
+                String responseBody = EntityUtils.toString(response.getEntity());
+
+                return ResponseEntity.status(statusCode).body(responseBody);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error calling external API: " + e.getMessage());
+        }
+    }
+}
