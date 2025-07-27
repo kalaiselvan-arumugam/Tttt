@@ -1,3 +1,4 @@
+``` java
 package com.example.demo.controller;
 
 import org.springframework.stereotype.Controller;
@@ -78,3 +79,100 @@ public class FileUploadController {
         return "redirect:/";
     }
 }
+```
+
+
+``` html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CSV File Upload</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+  <h2>Upload CSV Files</h2>
+  <input type="file" id="fileInput" multiple accept=".csv">
+
+  <script>
+    $(document).ready(function () {
+      $('#fileInput').on('change', function (e) {
+        const files = this.files;
+        let fileNames = [];
+
+        if (files.length === 0) {
+          console.log('No files selected.');
+          return;
+        }
+
+        if (files.length > 10) {
+          console.log('Error: You can only upload up to 10 files.');
+          this.value = '';
+          return;
+        }
+
+        let totalSize = 0;
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+
+          if (!file.name.toLowerCase().endsWith('.csv')) {
+            console.log(`Error: ${file.name} is not a CSV file.`);
+            this.value = '';
+            return;
+          }
+
+          const baseName = file.name.replace(/\.[^/.]+$/, "");
+          if (!baseName.startsWith("SISC")) {
+            console.log(`Error: ${file.name} - Invalid file name (should start with 'SISC').`);
+            this.value = '';
+            return;
+          }
+
+          if (baseName.length > 13) {
+            console.log(`Error: ${file.name} - File name too long (max 13 characters without extension).`);
+            this.value = '';
+            return;
+          }
+
+          totalSize += file.size;
+
+          if (totalSize > 10 * 1024 * 1024) {
+            console.log(`Error: Total file size exceeds 10 MB after adding ${file.name}.`);
+            this.value = '';
+            return;
+          }
+
+          fileNames.push(file.name);
+        }
+
+        console.log('All files are valid. Proceeding with upload...');
+        console.log('Selected file names:', fileNames);
+
+        // Create FormData and append files
+        let formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+          formData.append("files", files[i]);
+        }
+
+        // AJAX request to upload files to controller
+        $.ajax({
+          url: '/upload',
+          type: 'POST',
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function (response) {
+            console.log('Files uploaded successfully:', response);
+          },
+          error: function (xhr, status, error) {
+            console.error('File upload failed:', error);
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>
+```
