@@ -85,9 +85,6 @@ public class FileUploadController {
   $(document).ready(function () {
     $('#fileInput').on('change', function (e) {
       const files = this.files;
-      let fileNames = [];
-
-      // (Validation logic same as previous code...)
 
       let formData = new FormData();
       for (let i = 0; i < files.length; i++) {
@@ -104,9 +101,11 @@ public class FileUploadController {
           console.log('Success:', response);
           alert(response);
         },
-        error: function (xhr) {
-          console.error('Error:', xhr.responseText);
-          alert('Upload failed: ' + xhr.responseText);
+        error: function (xhr, status, error) {
+          console.error('Error status:', status);
+          console.error('Error thrown:', error);
+          console.error('Response text:', xhr.responseText);
+          alert('Upload failed: ' + (xhr.responseText || 'Unknown error'));
         }
       });
     });
