@@ -1,5 +1,8 @@
 package com.example.demo.controller;
 
+import java.io.IOException;
+import java.util.List;
+
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -8,7 +11,6 @@ import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
@@ -16,25 +18,21 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.util.List;
-
 @Controller
 public class FileUploadController {
-
-    @Value("${external.api.url}")
-    private String externalApiUrl; // e.g. http://localhost:8081/process
 
     private static final long MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10 MB
 
     @PostMapping("/upload")
-    public ResponseEntity<String> handleFileUpload(@RequestParam("files") List<MultipartFile> files) {
+    public ResponseEntity<String> handleFileUpload(@RequestParam List<MultipartFile> files) {
 
         if (files.isEmpty()) {
+            System.err.println("No files selected by user.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("No files selected.");
         }
 
         if (files.size() > 10) {
+            System.err.println("User tried to upload more than 10 files.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: You can only upload up to 10 files.");
         }
 
@@ -43,36 +41,75 @@ public class FileUploadController {
             String fileName = file.getOriginalFilename();
 
             if (fileName == null || !fileName.toLowerCase().endsWith(".csv")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " is not a CSV file.");
+                System.err.println("Invalid file type: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Error: " + fileName + " is not a CSV file.");
             }
 
             String baseName = fileName.substring(0, fileName.lastIndexOf('.'));
 
             if (!baseName.startsWith("SISC")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " must start with 'SISC'.");
+                System.err.println("Invalid file name: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Error: " + fileName + " - Invalid file name (should start with 'SISC').");
             }
 
             if (baseName.length() > 13) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Error: " + fileName + " name too long.");
+                System.err.println("File name too long: " + fileName);
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body("Error: " + fileName + " - File name too long (max 13 characters without extension).");
             }
 
             totalSize += file.getSize();
+
             if (totalSize > MAX_TOTAL_SIZE) {
+                System.err.println("Total file size exceeded after adding: " + fileName);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body("Error: Total file size exceeds 10 MB.");
+                        .body("Error: Total file size exceeds 10 MB after adding " + fileName);
             }
         }
 
-        // ✅ Call external API and return its response
-        return callExternalApi(files);
+        return callExternalAPI(files);
     }
 
-    /**
-     * 📌 Sends files to an external API using Apache HttpClient
-     */
-    private ResponseEntity<String> callExternalApi(List<MultipartFile> files) {
+//    private ResponseEntity<String> callExternalAPI(List<MultipartFile> files) {
+//
+//        RestTemplate restTemplate = new RestTemplate();
+//        HttpHeaders headers = new HttpHeaders();
+//        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+//
+//        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+//
+//        for (MultipartFile file : files) {
+//            try {
+//                ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
+//                    @Override
+//                    public String getFilename() {
+//                        return file.getOriginalFilename();
+//                    }
+//                };
+//                body.add("files", resource);
+//            } catch (IOException e) {
+//                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+//                        .body("Error reading file: " + file.getOriginalFilename());
+//            }
+//        }
+//  
+//        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+//
+//        try {
+//            ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:7000/dummy/upload", requestEntity, String.class);
+//
+//            return ResponseEntity.status(response.getStatusCode()).body(response.getBody());
+//        } catch (Exception e) {
+//            System.err.println("Error calling external API: " + e.getMessage());
+//            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error calling external API.");
+//        }
+//    }
+    
+    private ResponseEntity<String> callExternalAPI(List<MultipartFile> files) {
         try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
-            HttpPost uploadPost = new HttpPost(externalApiUrl);
+            HttpPost uploadPost = new HttpPost("http://localhost:7000/dummy/upload");
 
             MultipartEntityBuilder builder = MultipartEntityBuilder.create();
             for (MultipartFile file : files) {
