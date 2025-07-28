@@ -138,3 +138,42 @@ public class FileUploadController {
         }
     }
 }
+
+
+private ResponseEntity<String> callExternalAPI(List<MultipartFile> files) {
+    try (CloseableHttpClient httpClient = HttpClients.createDefault()) {
+        HttpPost uploadPost = new HttpPost("http://localhost:7000/dummy/upload");
+
+        MultipartEntityBuilder builder = MultipartEntityBuilder.create();
+        for (MultipartFile file : files) {
+            builder.addBinaryBody(
+                    "files",
+                    file.getBytes(),
+                    ContentType.MULTIPART_FORM_DATA,
+                    file.getOriginalFilename()
+            );
+        }
+
+        HttpEntity multipart = builder.build();
+        uploadPost.setEntity(multipart);
+
+        try (CloseableHttpResponse response = httpClient.execute(uploadPost)) {
+            int statusCode = response.getStatusLine().getStatusCode();
+            String responseBody = EntityUtils.toString(response.getEntity());
+
+            if (statusCode >= 200 && statusCode < 300) {
+                return ResponseEntity.ok(responseBody);
+            } else {
+                // Explicitly treat non-2xx as error
+                return ResponseEntity.status(statusCode)
+                        .body("External API error (" + statusCode + "): " + responseBody);
+            }
+        }
+
+    } catch (IOException e) {
+        e.printStackTrace();
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Error calling external API: " + e.getMessage());
+    }
+}
+
