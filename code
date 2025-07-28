@@ -70,3 +70,35 @@
   </script>
 </body>
 </html>
+
+
+      var files = $("#fileInput")[0].files;
+
+        if (files.length === 0) {
+            $("#error").text("Please select at least one CSV file.");
+            $("#result").text("");
+            return;
+        }
+
+        var formData = new FormData();
+        for (var i = 0; i < files.length; i++) {
+            formData.append("files", files[i]);
+        }
+
+        $.ajax({
+            url: "http://localhost:8000/upload",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (response) {
+                $("#result").text("✅ Success: " + response);
+                $("#error").text("");
+            },
+            error: function (xhr) {
+                $("#error").text("❌ Upload failed: " + xhr.responseText);
+                $("#result").text("");
+                console.error("Error:", xhr.responseText);
+            }
+        });
+    });
