@@ -1,0 +1,51 @@
+import org.apache.http.HttpEntity;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.message.BasicNameValuePair;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+
+public class FormSubmitExample {
+
+    public static void main(String[] args) {
+        String url = "http://localhost:8080/submitForm"; // Replace with your URL
+
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpPost post = new HttpPost(url);
+
+            // Prepare form parameters
+            List<NameValuePair> params = new ArrayList<>();
+            params.add(new BasicNameValuePair("name", "John Doe"));
+            params.add(new BasicNameValuePair("gender", "Male"));
+            params.add(new BasicNameValuePair("age", "30"));
+
+            // Encode parameters and set as entity
+            post.setEntity(new UrlEncodedFormEntity(params));
+
+            // Execute request
+            try (CloseableHttpResponse response = client.execute(post)) {
+                System.out.println("Response Code: " + response.getStatusLine().getStatusCode());
+
+                HttpEntity entity = response.getEntity();
+                if (entity != null) {
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(entity.getContent()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            System.out.println(line);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
