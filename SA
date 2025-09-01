@@ -215,3 +215,10 @@
 <div id="ajaxLoader"><div class="spinner"></div></div>
 
 
+$(document).ajaxStart(function() {
+  document.getElementById('ajaxLoader').style.display = 'flex';
+});
+$(document).ajaxStop(function() {
+  document.getElementById('ajaxLoader').style.display = 'none';
+});
+
