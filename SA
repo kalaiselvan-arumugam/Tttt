@@ -222,3 +222,5 @@ $(document).ajaxStop(function() {
   document.getElementById('ajaxLoader').style.display = 'none';
 });
 
+
+spring.jackson.time-zone=Asia/Hong_Kong
