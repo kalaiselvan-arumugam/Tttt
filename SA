@@ -158,3 +158,60 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
+ #ajaxLoader {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(240, 240, 240, 0.35); /* more transparent, glossy gray */
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(6px) saturate(1.5);
+        }
+        .spinner {
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #1976d2;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            background: rgba(255,255,255,0.6);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+        #result {
+            margin-top: 2em;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }ite-space: pre-wrap;
+        }
+
+
+ let ajaxActiveCount = 0;
+    const origFetch = window.fetch;
+    window.fetch = function(...args) {
+      ajaxActiveCount++;
+      document.getElementById('ajaxLoader').style.display = 'flex';
+      return origFetch.apply(this, args)
+        .finally(() => {
+          ajaxActiveCount = Math.max(0, ajaxActiveCount - 1);
+          if (ajaxActiveCount === 0) {
+            document.getElementById('ajaxLoader').style.display = 'none';
+          }
+        });
+    };
+
+<div id="ajaxLoader"><div class="spinner"></div></div>
+
+
