@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=80vw, initial-scale=1.0">
+    <title>SweetAlert2 Table Popup</title>
+    <!-- SweetAlert2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .swal2-popup.custom-table-popup {
+            width: 80vw !important;
+            height: 80vh !important;
+            max-width: 80vw !important;
+            max-height: 80vh !important;
+            padding: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-start !important;
+            align-items: stretch !important;
+        }
+        .table-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: fixed;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        th {
+            background: #1976d2 !important;
+            color: #fff !important;
+            position: sticky;
+            top: 0;
+        }
+        tbody {
+            display: block;
+            max-height: 60vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            width: 100%;
+            min-height: 60vh;
+        }
+        thead, tbody tr {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .swal2-close {
+            position: absolute !important;
+            right: 0.5em !important;
+            left: unset !important;
+            top: 0.5em !important;
+            z-index: 10000 !important;
+        }
+        /* Responsive */
+        @media (max-width: 600px) {
+            .swal2-popup.custom-table-popup {
+                width: 98vw !important;
+                height: 98vh !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button id="showTableBtn">Show Table Popup</button>
+    <script>
+        // Accepts the JSON input and displays the popup with navigation
+        function showJsonTablePopup(jsonInput) {
+            const objectKeys = Object.keys(jsonInput);
+            let currentIndex = 0;
+
+            function renderTableForKey(key) {
+                const records = jsonInput[key];
+                let html = `<div class='nav-bar' style='display:flex;align-items:center;justify-content:flex-start;margin-bottom:8px;width:100%;'><div>`;
+                html += `<button id='navPrev' ${currentIndex === 0 ? 'disabled' : ''} style='font-size:1.5em;margin-right:10px;'>&lt;</button>`;
+                html += `<span style='font-weight:bold;'>${key}</span>`;
+                html += `<button id='navNext' ${currentIndex === objectKeys.length - 1 ? 'disabled' : ''} style='font-size:1.5em;margin-left:10px;'>&gt;</button>`;
+                html += `</div></div>`;
+                html += `<table><thead><tr>`;
+                html += `<th>Tranche Id</th><th>Filed Name</th><th>English</th><th>Cantonese</th><th>Mandarin</th>`;
+                html += `</tr></thead><tbody>`;
+                for (const row of records) {
+                    html += `<tr>`;
+                    html += `<td>${row.tranche_id}</td><td>${row.field_name}</td><td>${row.field_value_en}</td><td>${row.field_value_cn}</td><td>${row.field_value_zh}</td>`;
+                    html += `</tr>`;
+                }
+                html += `</tbody></table>`;
+                return html;
+            }
+
+            function updateTableContent() {
+                const container = document.getElementById('swal-table-content');
+                if (container) {
+                    container.innerHTML = renderTableForKey(objectKeys[currentIndex]);
+                    attachNavHandlers();
+                }
+            }
+
+            function attachNavHandlers() {
+                const prevBtn = document.getElementById('navPrev');
+                const nextBtn = document.getElementById('navNext');
+                if (prevBtn) prevBtn.onclick = () => { if (currentIndex > 0) { currentIndex--; updateTableContent(); } };
+                if (nextBtn) nextBtn.onclick = () => { if (currentIndex < objectKeys.length - 1) { currentIndex++; updateTableContent(); } };
+            }
+
+            Swal.fire({
+                html: `<div class='table-container' id='swal-table-content' style='margin-top:0;'>${renderTableForKey(objectKeys[currentIndex])}</div>`,
+                showConfirmButton: false,
+                showCloseButton: true,
+                customClass: {
+                    popup: 'custom-table-popup'
+                },
+                didOpen: () => {
+                    attachNavHandlers();
+                }
+            });
+        }
+
+        // Generate 50+ dummy records for each object
+        function generateDummyRecords(trancheId) {
+            const arr = [];
+            for (let i = 1; i <= 55; i++) {
+                arr.push({
+                    tranche_id: trancheId,
+                    field_code: 'Field_' + i,
+                    field_name: 'Field Name ' + i,
+                    field_value_en: 'EN Value ' + i,
+                    field_value_cn: 'CN Value ' + i,
+                    field_value_zh: 'ZH Value ' + i,
+                    cn_dict_matched: true,
+                    zh_dict_matched: true
+                });
+            }
+            return arr;
+        }
+        const trancheJson = {
+            "SISC12345620.csv": generateDummyRecords("SISC12345620.csv"),
+            "SISC12345610.csv": generateDummyRecords("SISC12345610.csv")
+        };
+
+        // Replace the default button event to use the new function
+        document.getElementById('showTableBtn').onclick = function() {
+            showJsonTablePopup(trancheJson);
+        };
+    </script>
+</body>
+</html>
